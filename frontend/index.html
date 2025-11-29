@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scraped Schedule</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #1c1e21;
+            margin: 0;
+            padding: 20px;
+        }
+        #error, #loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 1.2em;
+        }
+        #error {
+            color: #d93025;
+        }
+        #schedule-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .profile-card {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .profile-card img {
+            width: 100%;
+            height: 350px;
+            object-fit: cover;
+        }
+        .profile-info {
+            padding: 15px;
+        }
+        .profile-info h3 {
+            margin: 0 0 10px;
+            font-size: 1.4em;
+            color: #050505;
+        }
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            font-size: 0.9em;
+        }
+        .schedule-day {
+            background-color: #f0f2f5;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .schedule-day .day {
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+
+    <h1 style="text-align: center; margin-bottom: 30px;">Escort Schedule</h1>
+
+    <div id="loading">Loading schedule...</div>
+    <div id="error" style="display: none;"></div>
+    <div id="schedule-container"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', fetchSchedule);
+
+        async function fetchSchedule() {
+            const loadingDiv = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            const container = document.getElementById('schedule-container');
+            
+            const apiUrl = 'http://127.0.0.1:8000/api/v1/schedule';
+
+            try {
+                const response = await fetch(apiUrl);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+
+                displaySchedule(result.data);
+
+            } catch (e) {
+                errorDiv.textContent = `Failed to load schedule: ${e.message}. Please ensure the backend server is running.`;
+                errorDiv.style.display = 'block';
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        }
+
+        function displaySchedule(data) {
+            const container = document.getElementById('schedule-container');
+            if (!data || data.length === 0) {
+                container.innerHTML = '<p>No schedule data found.</p>';
+                return;
+            }
+
+            container.innerHTML = ''; // Clear previous content
+
+            data.forEach(person => {
+                const card = document.createElement('div');
+                card.className = 'profile-card';
+
+                const scheduleHtml = Object.entries(person.schedule)
+                    .map(([day, time]) => `
+                        <div class="schedule-day">
+                            <span class="day">${day.toUpperCase()}</span>: 
+                            <span>${time}</span>
+                        </div>
+                    `).join('');
+
+                card.innerHTML = `
+                    <img src="${person.imageUrl}" alt="${person.name}" onerror="this.style.display='none'">
+                    <div class="profile-info">
+                        <h3>${person.name}</h3>
+                        <div class="schedule-grid">
+                            ${scheduleHtml}
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+    </script>
+
+</body>
+</html>
