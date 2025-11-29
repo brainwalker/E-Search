@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Search - Database Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            color: #667eea;
+            font-size: 2rem;
+        }
+
+        .back-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            padding: 10px 20px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .back-link:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 5px;
+            text-transform: uppercase;
+        }
+
+        .controls {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .table-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .table-btn {
+            padding: 15px;
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .table-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .table-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .query-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.95rem;
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .data-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: auto;
+        }
+
+        .table-info {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .pagination {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 20px;
+        }
+
+        .page-btn {
+            padding: 8px 16px;
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .json-cell {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .json-cell:hover {
+            background: #fff3cd;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow: auto;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .modal-close:hover {
+            color: #333;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            overflow: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Database Viewer</h1>
+            <a href="index.html" class="back-link">← Back to Listings</a>
+        </header>
+
+        <div class="stats-row" id="statsRow">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <p>Loading database stats...</p>
+            </div>
+        </div>
+
+        <div class="controls">
+            <h2 style="margin-bottom: 20px; color: #333;">Tables</h2>
+            <div class="table-list" id="tableList">
+                <div class="loading">Loading tables...</div>
+            </div>
+
+            <div class="query-section" style="border-top: 2px solid #e0e0e0; padding-top: 20px; margin-top: 20px;">
+                <h3 style="margin-bottom: 15px; color: #333;">Source Management</h3>
+                <div id="sourcesList" style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                    <div class="loading">Loading sources...</div>
+                </div>
+            </div>
+
+            <div class="query-section">
+                <h3 style="margin-bottom: 15px; color: #333;">Custom SQL Query</h3>
+                <textarea id="sqlQuery" placeholder="Enter SQL query (SELECT only)...">SELECT * FROM listings LIMIT 10</textarea>
+                <button class="btn-primary" onclick="executeQuery()">Execute Query</button>
+            </div>
+        </div>
+
+        <div class="data-container" id="dataContainer">
+            <div class="loading">
+                <p>Select a table or execute a query to view data</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="jsonModal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal()">&times;</span>
+            <h3 style="margin-bottom: 15px;">JSON Data</h3>
+            <pre id="jsonContent"></pre>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let currentTable = null;
+        let currentPage = 1;
+
+        // Initialize
+        async function init() {
+            await loadStats();
+            await loadTables();
+            await loadSources();
+        }
+
+        // Load sources with delete buttons
+        async function loadSources() {
+            try {
+                const response = await fetch(`${API_BASE}/api/sources`);
+                const sources = await response.json();
+
+                const container = document.getElementById('sourcesList');
+                container.innerHTML = '';
+
+                sources.forEach(source => {
+                    const card = document.createElement('div');
+                    card.style.cssText = 'background: #f8f9fa; padding: 15px; border-radius: 8px; min-width: 250px; border: 2px solid #e0e0e0;';
+                    card.innerHTML = `
+                        <div style="font-weight: 600; margin-bottom: 8px; color: #333;">${source.name}</div>
+                        <div style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">
+                            Last scraped: ${source.last_scraped ? new Date(source.last_scraped).toLocaleString() : 'Never'}
+                        </div>
+                        <button onclick="deleteSourceData(${source.id}, '${source.name}')"
+                                style="padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%;">
+                            🗑️ Delete All Data
+                        </button>
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Error loading sources:', error);
+            }
+        }
+
+        // Delete all data for a source
+        async function deleteSourceData(sourceId, sourceName) {
+            if (!confirm(`Are you sure you want to delete ALL listings and schedules from "${sourceName}"?\n\nThis action cannot be undone!`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/sources/${sourceId}/data`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+
+                alert(`✅ ${result.message}`);
+
+                // Reload stats and current table if showing listings
+                await loadStats();
+                if (currentTable === 'listings' || currentTable === 'schedules') {
+                    await loadTable(currentTable, currentPage);
+                }
+            } catch (error) {
+                console.error('Error deleting source data:', error);
+                alert('❌ Error deleting source data. Please try again.');
+            }
+        }
+
+        // Load database stats
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/db/stats`);
+                const stats = await response.json();
+
+                const container = document.getElementById('statsRow');
+                container.innerHTML = '';
+
+                // Extract database size
+                const dbSize = stats._database_size_mb;
+                delete stats._database_size_bytes;
+                delete stats._database_size_mb;
+
+                // Show database size
+                if (dbSize) {
+                    container.innerHTML += `
+                        <div class="stat-card">
+                            <div class="stat-number">${dbSize} MB</div>
+                            <div class="stat-label">Database Size</div>
+                        </div>
+                    `;
+                }
+
+                // Show table counts
+                for (const [table, count] of Object.entries(stats)) {
+                    container.innerHTML += `
+                        <div class="stat-card">
+                            <div class="stat-number">${count}</div>
+                            <div class="stat-label">${table}</div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Load tables
+        async function loadTables() {
+            try {
+                const response = await fetch(`${API_BASE}/db/tables`);
+                const data = await response.json();
+
+                const container = document.getElementById('tableList');
+                container.innerHTML = '';
+
+                data.tables.forEach(table => {
+                    const btn = document.createElement('button');
+                    btn.className = 'table-btn';
+                    btn.textContent = table.name;
+                    btn.onclick = () => loadTable(table.name);
+                    container.appendChild(btn);
+                });
+            } catch (error) {
+                console.error('Error loading tables:', error);
+                document.getElementById('tableList').innerHTML = '<p style="color: red;">Error loading tables</p>';
+            }
+        }
+
+        // Load table data
+        async function loadTable(tableName, page = 1) {
+            currentTable = tableName;
+            currentPage = page;
+
+            // Update active button
+            document.querySelectorAll('.table-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent === tableName) {
+                    btn.classList.add('active');
+                }
+            });
+
+            const container = document.getElementById('dataContainer');
+            container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Loading data...</p></div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/db/table/${tableName}?page=${page}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    container.innerHTML = `<p style="color: red;">${data.error}</p>`;
+                    return;
+                }
+
+                displayTableData(data);
+            } catch (error) {
+                console.error('Error loading table:', error);
+                container.innerHTML = '<p style="color: red;">Error loading table data</p>';
+            }
+        }
+
+        // Display table data
+        function displayTableData(data) {
+            const container = document.getElementById('dataContainer');
+
+            let html = `
+                <div class="table-info">
+                    <div>
+                        <strong>${data.table}</strong> -
+                        ${data.total_count} rows total
+                    </div>
+                    <div>
+                        Page ${data.page} of ${data.total_pages}
+                    </div>
+                </div>
+            `;
+
+            if (data.data.length === 0) {
+                html += '<p>No data in this table</p>';
+            } else {
+                html += '<table><thead><tr>';
+                data.columns.forEach(col => {
+                    html += `<th>${col}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+
+                data.data.forEach(row => {
+                    html += '<tr>';
+                    data.columns.forEach(col => {
+                        const value = row[col];
+                        let displayValue = value;
+
+                        // Check if it's JSON
+                        if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+                            try {
+                                JSON.parse(value);
+                                displayValue = `<span class="json-cell" onclick='showJson(${JSON.stringify(value).replace(/'/g, "&#39;")})'>${value}</span>`;
+                            } catch (e) {
+                                displayValue = value;
+                            }
+                        } else if (value === null) {
+                            displayValue = '<em style="color: #999;">null</em>';
+                        } else if (typeof value === 'boolean') {
+                            displayValue = value ? '✓' : '✗';
+                        }
+
+                        html += `<td>${displayValue}</td>`;
+                    });
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+
+                // Add pagination
+                if (data.total_pages > 1) {
+                    html += '<div class="pagination">';
+                    html += `<button class="page-btn" onclick="loadTable('${data.table}', ${data.page - 1})" ${data.page === 1 ? 'disabled' : ''}>← Previous</button>`;
+                    html += `<span>Page ${data.page} of ${data.total_pages}</span>`;
+                    html += `<button class="page-btn" onclick="loadTable('${data.table}', ${data.page + 1})" ${data.page === data.total_pages ? 'disabled' : ''}>Next →</button>`;
+                    html += '</div>';
+                }
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Execute custom query
+        async function executeQuery() {
+            const sql = document.getElementById('sqlQuery').value.trim();
+            if (!sql) {
+                alert('Please enter a SQL query');
+                return;
+            }
+
+            const container = document.getElementById('dataContainer');
+            container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Executing query...</p></div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/db/query?sql=${encodeURIComponent(sql)}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    container.innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+                    return;
+                }
+
+                // Display as table
+                let html = `
+                    <div class="table-info">
+                        <div><strong>Query Results</strong> - ${data.count} rows</div>
+                    </div>
+                `;
+
+                if (data.data.length === 0) {
+                    html += '<p>Query returned no results</p>';
+                } else {
+                    html += '<table><thead><tr>';
+                    data.columns.forEach(col => {
+                        html += `<th>${col}</th>`;
+                    });
+                    html += '</tr></thead><tbody>';
+
+                    data.data.forEach(row => {
+                        html += '<tr>';
+                        data.columns.forEach(col => {
+                            const value = row[col];
+                            let displayValue = value;
+
+                            if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+                                try {
+                                    JSON.parse(value);
+                                    displayValue = `<span class="json-cell" onclick='showJson(${JSON.stringify(value).replace(/'/g, "&#39;")})'>${value}</span>`;
+                                } catch (e) {
+                                    displayValue = value;
+                                }
+                            } else if (value === null) {
+                                displayValue = '<em style="color: #999;">null</em>';
+                            }
+
+                            html += `<td>${displayValue}</td>`;
+                        });
+                        html += '</tr>';
+                    });
+
+                    html += '</tbody></table>';
+                }
+
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Error executing query:', error);
+                container.innerHTML = '<p style="color: red;">Error executing query</p>';
+            }
+        }
+
+        // Show JSON in modal
+        function showJson(jsonString) {
+            const modal = document.getElementById('jsonModal');
+            const content = document.getElementById('jsonContent');
+
+            try {
+                const parsed = JSON.parse(jsonString);
+                content.textContent = JSON.stringify(parsed, null, 2);
+                modal.classList.add('show');
+            } catch (e) {
+                content.textContent = jsonString;
+                modal.classList.add('show');
+            }
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('jsonModal').classList.remove('show');
+        }
+
+        // Close modal on background click
+        document.getElementById('jsonModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>

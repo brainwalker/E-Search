@@ -3,143 +3,1332 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scraped Schedule</title>
+    <title>E-Search - Escort Listing Aggregator</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f0f2f5;
-            color: #1c1e21;
+        * {
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             padding: 20px;
         }
-        #error, #loading {
-            text-align: center;
-            padding: 20px;
-            font-size: 1.2em;
-        }
-        #error {
-            color: #d93025;
-        }
-        #schedule-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
+
+        .container {
             max-width: 1400px;
             margin: 0 auto;
         }
-        .profile-card {
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            overflow: hidden;
+
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
             display: flex;
-            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
         }
-        .profile-card img {
+
+        h1 {
+            color: #667eea;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .controls {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .control-section {
+            margin-bottom: 20px;
+        }
+
+        .control-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-section label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-item label {
+            margin: 0;
+            font-weight: 400;
+            cursor: pointer;
+        }
+
+        input[type="text"], input[type="number"], select {
             width: 100%;
-            height: 350px;
-            object-fit: cover;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
         }
-        .profile-info {
-            padding: 15px;
+
+        input[type="text"]:focus, input[type="number"]:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
         }
-        .profile-info h3 {
-            margin: 0 0 10px;
-            font-size: 1.4em;
-            color: #050505;
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
         }
-        .schedule-grid {
+
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .stats {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-            font-size: 0.9em;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
         }
-        .schedule-day {
-            background-color: #f0f2f5;
-            padding: 5px;
-            border-radius: 4px;
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
         }
-        .schedule-day .day {
+
+        .stat-number {
+            font-size: 2rem;
             font-weight: bold;
-            text-transform: uppercase;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .listings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 25px;
+        }
+
+        .listing-card {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .listing-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .listing-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .listing-name {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .listing-tier {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .listing-body {
+            padding: 20px;
+        }
+
+        .listing-detail {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .listing-detail:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #666;
+        }
+
+        .detail-value {
+            color: #333;
+        }
+
+        .rates-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .rates-title {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .rate-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .schedule-section {
+            margin-top: 15px;
+        }
+
+        .schedule-title {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .schedule-item {
+            background: #fff3cd;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border-left: 4px solid #ffc107;
+        }
+
+        .schedule-day {
+            font-weight: 600;
+            color: #856404;
+        }
+
+        .schedule-time {
+            color: #856404;
+            font-size: 0.9rem;
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .tag {
+            background: #667eea;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 60px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            color: #666;
+            font-size: 1.2rem;
+        }
+
+        .image-gallery {
+            display: flex;
+            gap: 5px;
+            overflow-x: auto;
+            padding: 10px 0;
+        }
+
+        .gallery-image {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .gallery-image:hover {
+            transform: scale(1.1);
+        }
+
+        .view-profile-btn {
+            width: 100%;
+            margin-top: 15px;
+            padding: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .view-profile-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .filters-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            min-width: 300px;
+        }
+
+        .notification.success {
+            border-left: 4px solid #10b981;
+        }
+
+        .notification.error {
+            border-left: 4px solid #ef4444;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+            padding: 20px;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            max-width: 1000px;
+            width: 100%;
+            max-height: 90vh;
+            overflow: auto;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 2rem;
+            cursor: pointer;
+            color: white;
+            background: rgba(0, 0, 0, 0.5);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            transition: all 0.3s;
+        }
+
+        .modal-close:hover {
+            background: rgba(0, 0, 0, 0.8);
+            transform: scale(1.1);
+        }
+
+        .modal-header-image {
+            width: 100%;
+            height: 400px;
+            object-fit: cover;
+            border-radius: 15px 15px 0 0;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .modal-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .modal-gallery-img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+
+        .modal-gallery-img:hover {
+            transform: scale(1.05);
+        }
+
+        /* Full-size image viewer */
+        .image-viewer {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .image-viewer.show {
+            display: flex;
+        }
+
+        .image-viewer-content {
+            max-width: 90%;
+            max-height: 90%;
+            position: relative;
+        }
+
+        .image-viewer img {
+            max-width: 100%;
+            max-height: 90vh;
+            object-fit: contain;
+        }
+
+        .image-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 2rem;
+            padding: 20px;
+            cursor: pointer;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .image-nav:hover {
+            background: white;
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .image-nav.prev {
+            left: 20px;
+        }
+
+        .image-nav.next {
+            right: 20px;
+        }
+
+        .listing-thumbnail {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+
+        .listing-thumbnail:hover {
+            transform: scale(1.02);
+        }
+
+        .listing-card {
+            cursor: pointer;
+        }
+
+        /* Modal header styles */
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px;
+            border-radius: 15px 15px 0 0;
+            color: white;
+            position: relative;
+        }
+
+        .modal-header h2 {
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+        }
+
+        .modal-tier {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        /* Modal image gallery */
+        .modal-image-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .modal-gallery-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .modal-gallery-image:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        /* Modal sections */
+        .modal-section {
+            margin-bottom: 25px;
+        }
+
+        .modal-section h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+
+        .modal-detail {
+            padding: 8px 0;
+            color: #555;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .modal-detail strong {
+            color: #333;
+            min-width: 120px;
+            display: inline-block;
+        }
+
+        /* Image viewer styles */
+        .viewer-image {
+            max-width: 90vw;
+            max-height: 90vh;
+            object-fit: contain;
+            border-radius: 10px;
+        }
+
+        .viewer-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 3rem;
+            color: white;
+            cursor: pointer;
+            z-index: 3001;
+            background: rgba(0, 0, 0, 0.5);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .viewer-close:hover {
+            background: rgba(0, 0, 0, 0.8);
+            transform: scale(1.1);
+        }
+
+        .image-counter {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 1rem;
+        }
+
+        .image-nav {
+            border: none;
+            font-weight: bold;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .image-nav:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .image-nav:disabled:hover {
+            transform: translateY(-50%);
+        }
+
+        @media (max-width: 768px) {
+            .listings-grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .modal-content {
+                max-height: 100vh;
+                border-radius: 0;
+            }
+
+            .modal-header-image {
+                height: 300px;
+            }
         }
     </style>
 </head>
 <body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>E-Search</h1>
+                <p class="subtitle">Multi-Source Escort Listing Aggregator</p>
+            </div>
+            <a href="database.html" style="color: #667eea; text-decoration: none; font-weight: 600; padding: 10px 20px; border: 2px solid #667eea; border-radius: 8px; transition: all 0.3s;" onmouseover="this.style.background='#667eea'; this.style.color='white'" onmouseout="this.style.background='transparent'; this.style.color='#667eea'">
+                📊 View Database
+            </a>
+        </header>
 
-    <h1 style="text-align: center; margin-bottom: 30px;">Escort Schedule</h1>
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalListings">0</div>
+                <div class="stat-label">Total Listings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="activeListings">0</div>
+                <div class="stat-label">Active Listings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalSources">0</div>
+                <div class="stat-label">Sources</div>
+            </div>
+        </div>
 
-    <div id="loading">Loading schedule...</div>
-    <div id="error" style="display: none;"></div>
-    <div id="schedule-container"></div>
+        <div class="controls">
+            <h2 style="margin-bottom: 20px; color: #333;">Filters & Controls</h2>
+
+            <div class="control-section">
+                <label>Sources</label>
+                <div class="checkbox-group" id="sourcesCheckboxes">
+                    <!-- Will be populated dynamically -->
+                </div>
+            </div>
+
+            <div class="control-section">
+                <label>Days of Week</label>
+                <div class="checkbox-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="monday" value="Monday">
+                        <label for="monday">Monday</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="tuesday" value="Tuesday">
+                        <label for="tuesday">Tuesday</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="wednesday" value="Wednesday">
+                        <label for="wednesday">Wednesday</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="thursday" value="Thursday">
+                        <label for="thursday">Thursday</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="friday" value="Friday">
+                        <label for="friday">Friday</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="saturday" value="Saturday">
+                        <label for="saturday">Saturday</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="sunday" value="Sunday">
+                        <label for="sunday">Sunday</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="hideExpired">
+                    <label for="hideExpired">Hide Expired Listings</label>
+                </div>
+            </div>
+
+            <div class="filters-row">
+                <div class="control-section">
+                    <label for="searchInput">Search by Name</label>
+                    <input type="text" id="searchInput" placeholder="Enter name...">
+                </div>
+
+                <div class="control-section">
+                    <label for="tierFilter">Tier</label>
+                    <select id="tierFilter">
+                        <option value="">All Tiers</option>
+                        <option value="VIP">VIP</option>
+                        <option value="PLATINUM VIP">Platinum VIP</option>
+                        <option value="ULTRA VIP">Ultra VIP</option>
+                        <option value="ELITE">Elite</option>
+                    </select>
+                </div>
+
+                <div class="control-section">
+                    <label for="nationalityFilter">Nationality</label>
+                    <input type="text" id="nationalityFilter" placeholder="e.g., Latina, Asian...">
+                </div>
+
+                <div class="control-section">
+                    <label for="hairFilter">Hair Color</label>
+                    <input type="text" id="hairFilter" placeholder="e.g., Blonde, Brunette...">
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn-primary" onclick="applyFilters()">Apply Filters</button>
+                <button class="btn-secondary" onclick="clearFilters()">Clear All</button>
+                <button class="btn-success" onclick="scrapeAllSources()">Scrape All Sources</button>
+            </div>
+        </div>
+
+        <div id="listingsContainer">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <p>Loading listings...</p>
+            </div>
+        </div>
+    </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', fetchSchedule);
+        const API_BASE = 'http://localhost:8000';
+        let allSources = [];
 
-        async function fetchSchedule() {
-            const loadingDiv = document.getElementById('loading');
-            const errorDiv = document.getElementById('error');
-            const container = document.getElementById('schedule-container');
-            
-            const apiUrl = 'http://127.0.0.1:8000/api/v1/schedule';
+        // Initialize the page
+        async function init() {
+            // Check if backend is running first
+            const isBackendRunning = await checkBackendStatus();
 
-            try {
-                const response = await fetch(apiUrl);
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const result = await response.json();
-                
-                if (result.error) {
-                    throw new Error(result.error);
-                }
-
-                displaySchedule(result.data);
-
-            } catch (e) {
-                errorDiv.textContent = `Failed to load schedule: ${e.message}. Please ensure the backend server is running.`;
-                errorDiv.style.display = 'block';
-            } finally {
-                loadingDiv.style.display = 'none';
-            }
-        }
-
-        function displaySchedule(data) {
-            const container = document.getElementById('schedule-container');
-            if (!data || data.length === 0) {
-                container.innerHTML = '<p>No schedule data found.</p>';
+            if (!isBackendRunning) {
+                showBackendOfflineMessage();
                 return;
             }
 
-            container.innerHTML = ''; // Clear previous content
+            await loadStats();
+            await loadSources();
+            await loadListings();
+        }
 
-            data.forEach(person => {
-                const card = document.createElement('div');
-                card.className = 'profile-card';
+        // Check if backend is running
+        async function checkBackendStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/`, { signal: AbortSignal.timeout(2000) });
+                return response.ok;
+            } catch (error) {
+                return false;
+            }
+        }
 
-                const scheduleHtml = Object.entries(person.schedule)
-                    .map(([day, time]) => `
-                        <div class="schedule-day">
-                            <span class="day">${day.toUpperCase()}</span>: 
-                            <span>${time}</span>
-                        </div>
-                    `).join('');
+        // Show backend offline message
+        function showBackendOfflineMessage() {
+            const container = document.getElementById('listingsContainer');
+            container.innerHTML = `
+                <div style="background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); text-align: center;">
+                    <h2 style="color: #ef4444; margin-bottom: 20px;">⚠️ Backend Server Not Running</h2>
+                    <p style="color: #666; font-size: 1.1rem; margin-bottom: 30px;">
+                        The backend API server needs to be started before you can view listings.
+                    </p>
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px; text-align: left;">
+                        <h3 style="color: #333; margin-bottom: 15px;">Quick Start:</h3>
+                        <p style="color: #666; margin-bottom: 10px;">Open a terminal and run:</p>
+                        <code style="background: #333; color: #10b981; padding: 15px; display: block; border-radius: 8px; font-size: 1rem;">
+                            cd /Users/shah/E-Search/backend<br>
+                            ./run.sh
+                        </code>
+                        <p style="color: #666; margin-top: 15px; font-size: 0.9rem;">
+                            Or use the one-command launcher from project root:
+                        </p>
+                        <code style="background: #333; color: #10b981; padding: 15px; display: block; border-radius: 8px; font-size: 1rem; margin-top: 10px;">
+                            cd /Users/shah/E-Search<br>
+                            ./start.sh
+                        </code>
+                    </div>
+                    <button onclick="location.reload()" style="padding: 15px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer; font-weight: 600;">
+                        Retry Connection
+                    </button>
+                </div>
+            `;
+        }
 
-                card.innerHTML = `
-                    <img src="${person.imageUrl}" alt="${person.name}" onerror="this.style.display='none'">
-                    <div class="profile-info">
-                        <h3>${person.name}</h3>
-                        <div class="schedule-grid">
-                            ${scheduleHtml}
-                        </div>
+        // Load statistics
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/api/stats`);
+                const stats = await response.json();
+
+                document.getElementById('totalListings').textContent = stats.total_listings;
+                document.getElementById('activeListings').textContent = stats.active_listings;
+                document.getElementById('totalSources').textContent = stats.total_sources;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                // Don't show error here, will be handled by checkBackendStatus
+            }
+        }
+
+        // Load sources
+        async function loadSources() {
+            try {
+                const response = await fetch(`${API_BASE}/api/sources`);
+                allSources = await response.json();
+
+                const container = document.getElementById('sourcesCheckboxes');
+                container.innerHTML = '';
+
+                allSources.forEach(source => {
+                    const div = document.createElement('div');
+                    div.className = 'checkbox-item';
+                    div.innerHTML = `
+                        <input type="checkbox" id="source${source.id}" value="${source.id}" checked>
+                        <label for="source${source.id}">${source.name}</label>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Error loading sources:', error);
+            }
+        }
+
+        // Load listings with filters
+        async function loadListings() {
+            const container = document.getElementById('listingsContainer');
+            container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Loading listings...</p></div>';
+
+            try {
+                const params = new URLSearchParams();
+
+                // Get selected sources
+                const selectedSources = Array.from(document.querySelectorAll('#sourcesCheckboxes input:checked'))
+                    .map(cb => cb.value);
+                if (selectedSources.length > 0) {
+                    params.append('source_ids', selectedSources.join(','));
+                }
+
+                // Get selected days
+                const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+                const selectedDays = days.filter(day => document.getElementById(day).checked)
+                    .map(day => document.getElementById(day).value);
+                if (selectedDays.length > 0) {
+                    params.append('days_of_week', selectedDays.join(','));
+                }
+
+                // Hide expired
+                if (document.getElementById('hideExpired').checked) {
+                    params.append('hide_expired', 'true');
+                }
+
+                // Search
+                const search = document.getElementById('searchInput').value.trim();
+                if (search) {
+                    params.append('search', search);
+                }
+
+                // Tier
+                const tier = document.getElementById('tierFilter').value;
+                if (tier) {
+                    params.append('tier', tier);
+                }
+
+                // Nationality
+                const nationality = document.getElementById('nationalityFilter').value.trim();
+                if (nationality) {
+                    params.append('nationality', nationality);
+                }
+
+                // Hair color
+                const hair = document.getElementById('hairFilter').value.trim();
+                if (hair) {
+                    params.append('hair_color', hair);
+                }
+
+                const response = await fetch(`${API_BASE}/api/listings?${params}`);
+                const listings = await response.json();
+
+                if (listings.length === 0) {
+                    container.innerHTML = '<div class="no-results">No listings found matching your filters.</div>';
+                    return;
+                }
+
+                const grid = document.createElement('div');
+                grid.className = 'listings-grid';
+
+                listings.forEach(listing => {
+                    const card = createListingCard(listing);
+                    grid.appendChild(card);
+                });
+
+                container.innerHTML = '';
+                container.appendChild(grid);
+            } catch (error) {
+                console.error('Error loading listings:', error);
+
+                // Check if it's a connection error
+                if (error.name === 'TypeError' || error.message.includes('fetch')) {
+                    showBackendOfflineMessage();
+                } else {
+                    container.innerHTML = '<div class="no-results">Error loading listings. Please try again.</div>';
+                }
+            }
+        }
+
+        // Create a listing card
+        function createListingCard(listing) {
+            const card = document.createElement('div');
+            card.className = 'listing-card';
+
+            // Make card clickable to open modal
+            card.style.cursor = 'pointer';
+            card.onclick = () => openListingModal(listing);
+
+            const images = listing.images ? JSON.parse(listing.images) : [];
+
+            let imagesHtml = '';
+            if (images.length > 0) {
+                imagesHtml = `
+                    <img src="${images[0]}" class="listing-thumbnail" alt="${listing.name}">
+                `;
+            }
+
+            let ratesHtml = '';
+            if (listing.incall_30min || listing.incall_45min || listing.incall_1hr || listing.outcall_1hr) {
+                ratesHtml = `
+                    <div class="rates-section">
+                        <div class="rates-title">Rates</div>
+                        ${listing.incall_30min ? `<div class="rate-item"><span>Incall 30min</span><span>$${listing.incall_30min}</span></div>` : ''}
+                        ${listing.incall_45min ? `<div class="rate-item"><span>Incall 45min</span><span>$${listing.incall_45min}</span></div>` : ''}
+                        ${listing.incall_1hr ? `<div class="rate-item"><span>Incall 1hr</span><span>$${listing.incall_1hr}</span></div>` : ''}
+                        ${listing.outcall_1hr ? `<div class="rate-item"><span>Outcall 1hr</span><span>$${listing.outcall_1hr}+</span></div>` : ''}
                     </div>
                 `;
-                container.appendChild(card);
-            });
+            }
+
+            let schedulesHtml = '';
+            if (listing.schedules && listing.schedules.length > 0) {
+                schedulesHtml = `
+                    <div class="schedule-section">
+                        <div class="schedule-title">Schedule</div>
+                        ${listing.schedules.slice(0, 3).map(schedule => `
+                            <div class="schedule-item">
+                                <div class="schedule-day">${schedule.day_of_week} ${schedule.location ? `- ${schedule.location}` : ''}</div>
+                                <div class="schedule-time">${schedule.start_time || ''} ${schedule.end_time ? `- ${schedule.end_time}` : ''}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            let tagsHtml = '';
+            if (listing.tags && listing.tags.length > 0) {
+                tagsHtml = `
+                    <div class="tags">
+                        ${listing.tags.map(tag => `<span class="tag">${tag.name}</span>`).join('')}
+                    </div>
+                `;
+            }
+
+            card.innerHTML = `
+                <div class="listing-header">
+                    <div class="listing-name">${listing.name}</div>
+                    <div class="listing-tier">${listing.tier || 'Standard'}</div>
+                </div>
+                <div class="listing-body">
+                    ${imagesHtml}
+                    ${listing.age ? `<div class="listing-detail"><span class="detail-label">Age:</span><span class="detail-value">${listing.age}</span></div>` : ''}
+                    ${listing.nationality ? `<div class="listing-detail"><span class="detail-label">Nationality:</span><span class="detail-value">${listing.nationality}</span></div>` : ''}
+                    ${listing.height ? `<div class="listing-detail"><span class="detail-label">Height:</span><span class="detail-value">${listing.height}</span></div>` : ''}
+                    ${listing.bust ? `<div class="listing-detail"><span class="detail-label">Bust:</span><span class="detail-value">${listing.bust}</span></div>` : ''}
+                    ${listing.hair_color ? `<div class="listing-detail"><span class="detail-label">Hair:</span><span class="detail-value">${listing.hair_color}</span></div>` : ''}
+                    ${listing.eye_color ? `<div class="listing-detail"><span class="detail-label">Eyes:</span><span class="detail-value">${listing.eye_color}</span></div>` : ''}
+                    ${listing.service_type ? `<div class="listing-detail"><span class="detail-label">Service:</span><span class="detail-value">${listing.service_type}</span></div>` : ''}
+                    ${ratesHtml}
+                    ${schedulesHtml}
+                    ${tagsHtml}
+                    ${listing.profile_url ? `<button class="view-profile-btn" onclick="event.stopPropagation(); window.open('${listing.profile_url}', '_blank')">View Full Profile</button>` : ''}
+                </div>
+            `;
+
+            return card;
         }
+
+        // Apply filters
+        function applyFilters() {
+            loadListings();
+        }
+
+        // Clear all filters
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('tierFilter').value = '';
+            document.getElementById('nationalityFilter').value = '';
+            document.getElementById('hairFilter').value = '';
+            document.getElementById('hideExpired').checked = false;
+
+            // Uncheck all days
+            ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach(day => {
+                document.getElementById(day).checked = false;
+            });
+
+            // Check all sources
+            document.querySelectorAll('#sourcesCheckboxes input').forEach(cb => {
+                cb.checked = true;
+            });
+
+            loadListings();
+        }
+
+        // Scrape all sources
+        async function scrapeAllSources() {
+            showNotification('Scraping started... This may take a few minutes.', 'success');
+
+            try {
+                const response = await fetch(`${API_BASE}/api/scrape-all`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+
+                showNotification(`Scraping completed! Found ${result.results[0].total_listings} listings.`, 'success');
+
+                // Reload data
+                await loadStats();
+                await loadListings();
+            } catch (error) {
+                console.error('Error scraping:', error);
+                showNotification('Error occurred during scraping. Please try again.', 'error');
+            }
+        }
+
+        // Show notification
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `<p>${message}</p>`;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        // Open listing modal with full details
+        function openListingModal(listing) {
+            const modal = document.getElementById('listingModal');
+            const images = listing.images ? JSON.parse(listing.images) : [];
+
+            // Build image gallery HTML
+            let galleryHtml = '';
+            if (images.length > 0) {
+                galleryHtml = `
+                    <div class="modal-image-gallery">
+                        ${images.map((img, index) => `
+                            <img src="${img}"
+                                 class="modal-gallery-image"
+                                 alt="${listing.name}"
+                                 onclick="event.stopPropagation(); openImageViewer(${JSON.stringify(images).replace(/"/g, '&quot;')}, ${index})">
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            // Build rates HTML
+            let ratesHtml = '';
+            if (listing.incall_30min || listing.incall_45min || listing.incall_1hr || listing.outcall_1hr) {
+                ratesHtml = `
+                    <div class="modal-section">
+                        <h3>Rates</h3>
+                        ${listing.incall_30min ? `<div class="modal-detail"><strong>Incall 30min:</strong> $${listing.incall_30min}</div>` : ''}
+                        ${listing.incall_45min ? `<div class="modal-detail"><strong>Incall 45min:</strong> $${listing.incall_45min}</div>` : ''}
+                        ${listing.incall_1hr ? `<div class="modal-detail"><strong>Incall 1hr:</strong> $${listing.incall_1hr}</div>` : ''}
+                        ${listing.outcall_1hr ? `<div class="modal-detail"><strong>Outcall 1hr:</strong> $${listing.outcall_1hr}+</div>` : ''}
+                    </div>
+                `;
+            }
+
+            // Build schedule HTML
+            let schedulesHtml = '';
+            if (listing.schedules && listing.schedules.length > 0) {
+                schedulesHtml = `
+                    <div class="modal-section">
+                        <h3>Schedule</h3>
+                        ${listing.schedules.map(schedule => `
+                            <div class="modal-detail">
+                                <strong>${schedule.day_of_week}</strong>
+                                ${schedule.location ? `at ${schedule.location}` : ''}
+                                ${schedule.start_time ? `- ${schedule.start_time}` : ''}
+                                ${schedule.end_time ? `to ${schedule.end_time}` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            // Build tags HTML
+            let tagsHtml = '';
+            if (listing.tags && listing.tags.length > 0) {
+                tagsHtml = `
+                    <div class="tags" style="margin-top: 15px;">
+                        ${listing.tags.map(tag => `<span class="tag">${tag.name}</span>`).join('')}
+                    </div>
+                `;
+            }
+
+            document.getElementById('modalContent').innerHTML = `
+                <div class="modal-header">
+                    <h2>${listing.name}</h2>
+                    <span class="modal-tier">${listing.tier || 'Standard'}</span>
+                    <span class="modal-close" onclick="closeModal()">&times;</span>
+                </div>
+                ${galleryHtml}
+                <div class="modal-body">
+                    <div class="modal-section">
+                        <h3>Details</h3>
+                        ${listing.age ? `<div class="modal-detail"><strong>Age:</strong> ${listing.age}</div>` : ''}
+                        ${listing.nationality ? `<div class="modal-detail"><strong>Nationality:</strong> ${listing.nationality}</div>` : ''}
+                        ${listing.height ? `<div class="modal-detail"><strong>Height:</strong> ${listing.height}</div>` : ''}
+                        ${listing.bust ? `<div class="modal-detail"><strong>Bust:</strong> ${listing.bust}${listing.bust_type ? ` (${listing.bust_type})` : ''}</div>` : ''}
+                        ${listing.weight ? `<div class="modal-detail"><strong>Weight:</strong> ${listing.weight}</div>` : ''}
+                        ${listing.hair_color ? `<div class="modal-detail"><strong>Hair:</strong> ${listing.hair_color}</div>` : ''}
+                        ${listing.eye_color ? `<div class="modal-detail"><strong>Eyes:</strong> ${listing.eye_color}</div>` : ''}
+                        ${listing.service_type ? `<div class="modal-detail"><strong>Service Type:</strong> ${listing.service_type}</div>` : ''}
+                    </div>
+                    ${ratesHtml}
+                    ${schedulesHtml}
+                    ${tagsHtml}
+                    ${listing.profile_url ? `
+                        <button class="view-profile-btn"
+                                onclick="event.stopPropagation(); window.open('${listing.profile_url}', '_blank')"
+                                style="margin-top: 20px; width: 100%;">
+                            View Full Profile on Website
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+
+            modal.style.display = 'flex';
+        }
+
+        // Close the listing modal
+        function closeModal() {
+            document.getElementById('listingModal').style.display = 'none';
+        }
+
+        // Open full-size image viewer
+        let currentImageIndex = 0;
+        let currentImages = [];
+
+        function openImageViewer(images, index) {
+            currentImages = images;
+            currentImageIndex = index;
+            updateImageViewer();
+            document.getElementById('imageViewer').style.display = 'flex';
+        }
+
+        // Update the image viewer with current image
+        function updateImageViewer() {
+            const img = document.getElementById('viewerImage');
+            img.src = currentImages[currentImageIndex];
+            document.getElementById('imageCounter').textContent = `${currentImageIndex + 1} / ${currentImages.length}`;
+
+            // Enable/disable navigation buttons
+            document.getElementById('prevBtn').disabled = currentImageIndex === 0;
+            document.getElementById('nextBtn').disabled = currentImageIndex === currentImages.length - 1;
+        }
+
+        // Navigate images
+        function navigateImage(direction) {
+            currentImageIndex += direction;
+            if (currentImageIndex < 0) currentImageIndex = 0;
+            if (currentImageIndex >= currentImages.length) currentImageIndex = currentImages.length - 1;
+            updateImageViewer();
+        }
+
+        // Close image viewer
+        function closeImageViewer() {
+            document.getElementById('imageViewer').style.display = 'none';
+        }
+
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('listingModal');
+            const viewer = document.getElementById('imageViewer');
+            if (event.target === modal) {
+                closeModal();
+            }
+            if (event.target === viewer) {
+                closeImageViewer();
+            }
+        }
+
+        // Keyboard navigation for image viewer
+        document.addEventListener('keydown', function(event) {
+            const viewer = document.getElementById('imageViewer');
+            if (viewer.style.display === 'flex') {
+                if (event.key === 'ArrowLeft') {
+                    navigateImage(-1);
+                } else if (event.key === 'ArrowRight') {
+                    navigateImage(1);
+                } else if (event.key === 'Escape') {
+                    closeImageViewer();
+                }
+            }
+        });
+
+        // Initialize on page load
+        init();
     </script>
+
+    <!-- Listing Detail Modal -->
+    <div id="listingModal" class="modal">
+        <div id="modalContent" class="modal-content"></div>
+    </div>
+
+    <!-- Full-Size Image Viewer -->
+    <div id="imageViewer" class="image-viewer">
+        <span class="viewer-close" onclick="closeImageViewer()">&times;</span>
+        <button id="prevBtn" class="image-nav prev" onclick="navigateImage(-1)">&#10094;</button>
+        <img id="viewerImage" class="viewer-image" alt="Full size">
+        <button id="nextBtn" class="image-nav next" onclick="navigateImage(1)">&#10095;</button>
+        <div id="imageCounter" class="image-counter"></div>
+    </div>
 
 </body>
 </html>

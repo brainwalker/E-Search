@@ -1,13 +1,22 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-import requests
-from bs4 import BeautifulSoup
-import re
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
+from typing import List, Optional
+from datetime import datetime, timedelta
+import json
 
-app = FastAPI()
+from api.database import get_db, init_db, Listing, Schedule, Source, Tag
+from api.scraper import SexyFriendsTorontoScraper
+from api import db_viewer
+from pydantic import BaseModel
 
-# Allow all origins for simplicity, but in a production environment
-# you would want to restrict this to your frontend's domain.
+app = FastAPI(title="E-Search API", version="1.0.0")
+
+# Include database viewer router
+app.include_router(db_viewer.router)
+
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,77 +25,262 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def get_session_cookie(url):
-    """
-    Fetches the session cookie required to access the schedule page.
-    """
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        # The site might have a consent page, so we look for a specific link
-        # to the main content if we're not on the schedule page directly.
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # This is a simplified example. The actual site might have a more complex
-        # mechanism for age verification and session handling.
-        # We assume the initial request gives us the necessary cookies.
-        return response.cookies
-    except requests.RequestException as e:
-        print(f"Error getting session cookie: {e}")
-        return None
+# Initialize database on startup
+@app.on_event("startup")
+def startup_event():
+    init_db()
 
-@app.get("/api/v1/schedule")
-def get_schedule():
-    """
-    Scrapes the escort schedule data from the website.
-    """
-    schedule_url = "https://www.sexyfriendstoronto.com/toronto-escorts/schedule"
-    base_url = "https://www.sexyfriendstoronto.com"
-    
-    cookies = get_session_cookie(base_url)
-    if not cookies:
-        return {"error": "Could not obtain session cookie."}
 
-    try:
-        response = requests.get(schedule_url, cookies=cookies, timeout=15)
-        response.raise_for_status()
-    except requests.RequestException as e:
-        return {"error": f"Failed to fetch schedule page: {e}"}
+# Pydantic models for API responses
+class ScheduleResponse(BaseModel):
+    id: int
+    day_of_week: str
+    start_time: Optional[str]
+    end_time: Optional[str]
+    location: Optional[str]
+    is_expired: bool
 
-    soup = BeautifulSoup(response.content, 'html.parser')
-    
-    schedule_data = []
-    
-    schedule_rows = soup.find_all('div', class_='schedule-row')
+    class Config:
+        from_attributes = True
 
-    for row in schedule_rows:
-        name_tag = row.find('h3')
-        if not name_tag:
-            continue
-            
-        name = name_tag.get_text(strip=True)
-        
-        img_tag = row.find('img')
-        # Resolve relative URL to absolute
-        image_url = img_tag['src'] if img_tag and 'src' in img_tag.attrs else ''
-        if image_url and not image_url.startswith('http'):
-            image_url = base_url + image_url
 
-        # Extract schedule times
-        days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
-        schedule = {}
-        for day in days:
-            day_div = row.find('div', class_=f"time-slot {day}")
-            if day_div:
-                time_text = day_div.get_text(strip=True)
-                schedule[day] = time_text if time_text else "Not Available"
-            else:
-                schedule[day] = "Not Available"
+class TagResponse(BaseModel):
+    id: int
+    name: str
 
-        schedule_data.append({
-            "name": name,
-            "imageUrl": image_url,
-            "schedule": schedule
-        })
+    class Config:
+        from_attributes = True
 
-    return {"data": schedule_data}
+
+class ListingResponse(BaseModel):
+    id: int
+    name: str
+    profile_url: Optional[str]
+    tier: Optional[str]
+    age: Optional[int]
+    nationality: Optional[str]
+    height: Optional[str]
+    weight: Optional[str]
+    bust: Optional[str]
+    bust_type: Optional[str]
+    eye_color: Optional[str]
+    hair_color: Optional[str]
+    service_type: Optional[str]
+    location: Optional[str]
+    incall_30min: Optional[int]
+    incall_45min: Optional[int]
+    incall_1hr: Optional[int]
+    outcall_1hr: Optional[int]
+    rate_notes: Optional[str]
+    images: Optional[str]
+    is_active: bool
+    is_expired: bool
+    created_at: datetime
+    updated_at: datetime
+    schedules: List[ScheduleResponse]
+    tags: List[TagResponse]
+
+    class Config:
+        from_attributes = True
+
+
+class SourceResponse(BaseModel):
+    id: int
+    name: str
+    url: str
+    active: bool
+    last_scraped: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+# API Endpoints
+
+@app.get("/")
+async def root():
+    return {"message": "E-Search API", "version": "1.0.0"}
+
+
+@app.get("/api/sources", response_model=List[SourceResponse])
+async def get_sources(db: Session = Depends(get_db)):
+    """Get all scraping sources"""
+    sources = db.query(Source).all()
+    return sources
+
+
+@app.post("/api/scrape/{source_name}")
+async def scrape_source(source_name: str, db: Session = Depends(get_db)):
+    """Trigger scraping for a specific source"""
+    if source_name.lower() == "sexyfriendstoronto":
+        scraper = SexyFriendsTorontoScraper(db)
+        result = await scraper.scrape_and_save()
+        return result
+    else:
+        raise HTTPException(status_code=404, detail=f"Scraper for {source_name} not found")
+
+
+@app.post("/api/scrape-all")
+async def scrape_all_sources(db: Session = Depends(get_db)):
+    """Trigger scraping for all active sources"""
+    results = []
+
+    # SexyFriendsToronto
+    scraper = SexyFriendsTorontoScraper(db)
+    result = await scraper.scrape_and_save()
+    results.append(result)
+
+    return {"results": results}
+
+
+@app.get("/api/listings", response_model=List[ListingResponse])
+async def get_listings(
+    source_ids: Optional[str] = Query(None, description="Comma-separated source IDs"),
+    days_of_week: Optional[str] = Query(None, description="Comma-separated days (Monday,Tuesday,etc)"),
+    hide_expired: bool = Query(False, description="Hide expired listings"),
+    tier: Optional[str] = Query(None, description="Filter by tier (VIP, PLATINUM VIP, etc)"),
+    min_age: Optional[int] = Query(None, description="Minimum age"),
+    max_age: Optional[int] = Query(None, description="Maximum age"),
+    nationality: Optional[str] = Query(None, description="Filter by nationality"),
+    hair_color: Optional[str] = Query(None, description="Filter by hair color"),
+    tags: Optional[str] = Query(None, description="Comma-separated tags"),
+    search: Optional[str] = Query(None, description="Search by name"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db)
+):
+    """Get listings with various filters"""
+    query = db.query(Listing)
+
+    # Filter by source
+    if source_ids:
+        source_id_list = [int(x.strip()) for x in source_ids.split(",")]
+        query = query.filter(Listing.source_id.in_(source_id_list))
+
+    # Filter by expired status
+    if hide_expired:
+        query = query.filter(Listing.is_expired == False)
+
+    # Filter by tier
+    if tier:
+        query = query.filter(Listing.tier == tier)
+
+    # Filter by age
+    if min_age:
+        query = query.filter(Listing.age >= min_age)
+    if max_age:
+        query = query.filter(Listing.age <= max_age)
+
+    # Filter by nationality
+    if nationality:
+        query = query.filter(Listing.nationality.ilike(f"%{nationality}%"))
+
+    # Filter by hair color
+    if hair_color:
+        query = query.filter(Listing.hair_color.ilike(f"%{hair_color}%"))
+
+    # Filter by tags
+    if tags:
+        tag_list = [x.strip() for x in tags.split(",")]
+        query = query.join(Listing.tags).filter(Tag.name.in_(tag_list))
+
+    # Search by name
+    if search:
+        query = query.filter(Listing.name.ilike(f"%{search}%"))
+
+    # Filter by days of week (through schedules)
+    if days_of_week:
+        day_list = [x.strip() for x in days_of_week.split(",")]
+        query = query.join(Listing.schedules).filter(Schedule.day_of_week.in_(day_list))
+
+    # Order by updated_at descending
+    query = query.order_by(Listing.updated_at.desc())
+
+    # Get total count
+    total = query.count()
+
+    # Apply pagination
+    listings = query.offset(skip).limit(limit).all()
+
+    return listings
+
+
+@app.get("/api/listings/{listing_id}", response_model=ListingResponse)
+async def get_listing(listing_id: int, db: Session = Depends(get_db)):
+    """Get a single listing by ID"""
+    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    return listing
+
+
+@app.get("/api/tags", response_model=List[TagResponse])
+async def get_tags(db: Session = Depends(get_db)):
+    """Get all available tags"""
+    tags = db.query(Tag).all()
+    return tags
+
+
+@app.get("/api/stats")
+async def get_stats(db: Session = Depends(get_db)):
+    """Get statistics about the database"""
+    total_listings = db.query(Listing).count()
+    active_listings = db.query(Listing).filter(Listing.is_active == True).count()
+    expired_listings = db.query(Listing).filter(Listing.is_expired == True).count()
+    total_sources = db.query(Source).count()
+    active_sources = db.query(Source).filter(Source.active == True).count()
+
+    return {
+        "total_listings": total_listings,
+        "active_listings": active_listings,
+        "expired_listings": expired_listings,
+        "total_sources": total_sources,
+        "active_sources": active_sources
+    }
+
+
+@app.delete("/api/listings/{listing_id}")
+async def delete_listing(listing_id: int, db: Session = Depends(get_db)):
+    """Delete a listing"""
+    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    db.delete(listing)
+    db.commit()
+    return {"message": "Listing deleted successfully"}
+
+
+@app.put("/api/listings/{listing_id}/expire")
+async def expire_listing(listing_id: int, db: Session = Depends(get_db)):
+    """Mark a listing as expired"""
+    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    listing.is_expired = True
+    db.commit()
+    return {"message": "Listing marked as expired"}
+
+
+@app.delete("/api/sources/{source_id}/data")
+async def delete_source_data(source_id: int, db: Session = Depends(get_db)):
+    """Delete all listings and schedules for a specific source"""
+    source = db.query(Source).filter(Source.id == source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    # Delete all listings for this source (cascades to schedules)
+    deleted_count = db.query(Listing).filter(Listing.source_id == source_id).delete()
+    db.commit()
+
+    return {
+        "message": f"Deleted {deleted_count} listings from {source.name}",
+        "source_name": source.name,
+        "deleted_listings": deleted_count
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
