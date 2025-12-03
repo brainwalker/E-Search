@@ -47,9 +47,6 @@ class Listing(Base):
     hair_color = Column(String)
     service_type = Column(String)  # GF ENTERTAINER, etc.
 
-    # Location and availability
-    location = Column(String)  # NORTH YORK YONGE & SHEPPARD, etc.
-
     # Rates
     incall_30min = Column(Integer)
     incall_45min = Column(Integer)

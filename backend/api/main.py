@@ -66,7 +66,6 @@ class ListingResponse(BaseModel):
     eye_color: Optional[str]
     hair_color: Optional[str]
     service_type: Optional[str]
-    location: Optional[str]
     incall_30min: Optional[int]
     incall_45min: Optional[int]
     incall_1hr: Optional[int]

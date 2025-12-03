@@ -11,7 +11,8 @@
       "Bash(pkill:*)",
       "Bash(open:*)",
       "Bash(lsof:*)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(git -C /Users/shah/E-Search/backend diff HEAD -- api/main.py)"
     ],
     "deny": [],
     "ask": []

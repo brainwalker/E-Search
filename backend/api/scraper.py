@@ -95,15 +95,15 @@ class SexyFriendsTorontoScraper:
                         clean_text = clean_text.replace(t, '').strip()
 
                     # Enhanced time pattern to handle more formats:
-                    # 12PM-12AM, 7P-11PM, 11AM-LATE, 3;30PM, 3PM, 1M-5PM, 10AM-3PM
+                    # 12PM-12AM, 7P-11PM, 11AM-LATE, 3;30PM, 3PM, 1M-5PM, 10AM-3PM, 7:30PM-11;30PM
                     time_patterns = [
-                        # Standard: 12PM-12AM, 11:30AM-3:30PM
-                        r'(\d{1,2}(?::\d{2})?\s*(?:AM|PM)\s*-\s*\d{1,2}(?::\d{2})?\s*(?:AM|PM))',
+                        # Standard ranges (handles both : and ; in times): 12PM-12AM, 11:30AM-3:30PM, 7:30PM-11;30PM
+                        r'(\d{1,2}(?:[;:]\d{2})?\s*(?:AM|PM)\s*-\s*\d{1,2}(?:[;:]\d{2})?\s*(?:AM|PM))',
                         # Missing M: 7P-11PM, 1M-5PM
-                        r'(\d{1,2}\s*[PM]\s*-\s*\d{1,2}(?::\d{2})?\s*(?:AM|PM))',
+                        r'(\d{1,2}\s*[PM]\s*-\s*\d{1,2}(?:[;:]\d{2})?\s*(?:AM|PM))',
                         # LATE: 11AM-LATE, 1PM-LATE
-                        r'(\d{1,2}(?::\d{2})?\s*(?:AM|PM)\s*-\s*LATE)',
-                        # Semicolon instead of colon: 3;30PM, 11:30AM-3;30PM
+                        r'(\d{1,2}(?:[;:]\d{2})?\s*(?:AM|PM)\s*-\s*LATE)',
+                        # Semicolon or colon time (only if not part of range): 3;30PM, 11:30AM
                         r'(\d{1,2}[;:]\d{2}\s*(?:AM|PM))',
                         # Just time: 3PM, 3P (trailing)
                         r'(\d{1,2}\s*(?:AM|PM|P))\s*$',
