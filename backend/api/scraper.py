@@ -192,8 +192,8 @@ class SexyFriendsTorontoScraper:
                 profile_data['bust_type'] = None
 
         # Extract height (formats: 5'9, 5'9", 5 ft 9, etc.)
-        # Handles all quote types including U+2019 (') and HTML entity &rsquo;
-        height_match = re.search(r"Height:\s*(\d+['′''`´']\d*[\"″]?)", text, re.IGNORECASE)
+        # Handles various quote chars: ' ′ ' ' ` ´ and HTML entity &rsquo; (BeautifulSoup usually decodes it to U+2019)
+        height_match = re.search(r"Height:\s*(\d+(?:['′''`´']|&rsquo;)\d*[\"″]?)", text, re.IGNORECASE)
         if height_match:
             profile_data['height'] = height_match.group(1).strip()
 
