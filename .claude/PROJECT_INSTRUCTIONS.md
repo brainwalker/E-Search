@@ -1,5 +1,16 @@
 # E-Search Project Instructions
 
+## ⚠️ IMPORTANT: Git Branch
+
+**ALWAYS work on the `Cursed-Cursor` branch when using Cursor/Claude.**
+
+Before making any changes:
+1. Verify you're on the correct branch: `git branch --show-current` should show `Cursed-Cursor`
+2. If not on the correct branch, switch: `git checkout Cursed-Cursor`
+3. All commits and changes should be made to `Cursed-Cursor` branch only
+
+**Do NOT make changes to other branches** (like `naughty-mirzakhani` or `dev`) unless explicitly requested.
+
 ## Project Structure
 
 This project follows a well-organized folder structure. **ALL new files must follow this structure.**
