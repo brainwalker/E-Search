@@ -5,27 +5,102 @@ from typing import List, Dict, Optional
 import httpx
 from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session
-from api.database import Listing, Schedule, Source, Tag
+from api.database import Listing, Schedule, Source, Tag, Location
 
 
 class SexyFriendsTorontoScraper:
     def __init__(self, db: Session):
         self.db = db
-        self.base_url = "https://www.sexyfriendstoronto.com"
-        self.schedule_url = f"{self.base_url}/toronto-escorts/schedule"
-        self.source_name = "SexyFriendsToronto"
+        self.source_name = "SFT"  # Updated from SexyFriendsToronto
+
+        # Get source from database
+        self.source = self.get_or_create_source()
+
+        # Use URLs from database
+        self.schedule_url = self.source.url
+        self.base_url = self.source.base_url or "https://www.sexyfriendstoronto.com/toronto-escorts/"
+        self.image_base_url = self.source.image_base_url or "https://www.sexyfriendstoronto.com/toronto-escorts/thumbnails/"
 
     def get_or_create_source(self) -> Source:
         source = self.db.query(Source).filter_by(name=self.source_name).first()
         if not source:
+            # Create with proper URLs
             source = Source(
                 name=self.source_name,
-                url=self.base_url,
+                url="https://www.sexyfriendstoronto.com/toronto-escorts/schedule",
+                base_url="https://www.sexyfriendstoronto.com/toronto-escorts/",
+                image_base_url="https://www.sexyfriendstoronto.com/toronto-escorts/thumbnails/",
                 active=True
             )
             self.db.add(source)
             self.db.commit()
         return source
+
+    def match_location(self, location_string: str, source_id: int) -> int:
+        """
+        Match a location string from the schedule page to a Location ID.
+        Returns the location_id or the default location if no match found.
+        """
+        # Normalize the location string
+        location_string = location_string.strip()
+
+        # Try to find a matching location
+        # First, try exact match on the full location string (e.g., "Vaughan - unknown")
+        # The format from schedule page seems to be "Town - Location"
+        if ' - ' in location_string or ', ' in location_string:
+            # Try splitting by different delimiters
+            parts = None
+            if ' - ' in location_string:
+                parts = location_string.split(' - ', 1)
+            elif ', ' in location_string:
+                parts = location_string.split(', ', 1)
+
+            if parts and len(parts) == 2:
+                town = parts[0].strip()
+                location = parts[1].strip()
+
+                # Try exact match
+                db_location = self.db.query(Location).filter(
+                    Location.source_id == source_id,
+                    Location.town == town,
+                    Location.location == location
+                ).first()
+
+                if db_location:
+                    return db_location.id
+
+        # If no exact match, try fuzzy matching by searching for keywords
+        # Search for locations that match parts of the string
+        locations = self.db.query(Location).filter(Location.source_id == source_id).all()
+
+        for loc in locations:
+            if loc.is_default:
+                continue  # Skip default, use as last resort
+
+            # Check if town and location are in the string
+            if loc.town.lower() in location_string.lower() and loc.location.lower() in location_string.lower():
+                return loc.id
+
+        # Return default location if no match found
+        default_location = self.db.query(Location).filter(
+            Location.source_id == source_id,
+            Location.is_default == True
+        ).first()
+
+        if default_location:
+            return default_location.id
+
+        # If no default exists, create one
+        print(f"Warning: No default location found for source {source_id}, creating one...")
+        default_location = Location(
+            source_id=source_id,
+            town="Unknown",
+            location="unknown",
+            is_default=True
+        )
+        self.db.add(default_location)
+        self.db.commit()
+        return default_location.id
 
     async def fetch_page(self, url: str) -> str:
         async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
@@ -39,6 +114,37 @@ class SexyFriendsTorontoScraper:
             parts = time_str.split('-')
             return parts[0].strip(), parts[1].strip()
         return time_str, time_str
+
+    def get_date_from_day_of_week(self, day_of_week: str) -> datetime:
+        """Convert day of week string to actual date (next occurrence of that day)"""
+        # Map day names to weekday numbers (0 = Monday, 6 = Sunday)
+        day_map = {
+            'Monday': 0,
+            'Tuesday': 1,
+            'Wednesday': 2,
+            'Thursday': 3,
+            'Friday': 4,
+            'Saturday': 5,
+            'Sunday': 6
+        }
+
+        today = datetime.now()
+        target_day = day_map.get(day_of_week)
+
+        if target_day is None:
+            # If day not recognized, return today's date
+            return today.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Calculate days until target day
+        current_day = today.weekday()
+        days_ahead = target_day - current_day
+
+        # If the day is today or has passed this week, get next week's occurrence
+        if days_ahead <= 0:
+            days_ahead += 7
+
+        target_date = today + timedelta(days=days_ahead)
+        return target_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
     def extract_tier(self, text: str) -> Optional[str]:
         """Extract tier from listing text (PLATINUM VIP, ELITE, ULTRA VIP, etc.)"""
@@ -140,8 +246,8 @@ class SexyFriendsTorontoScraper:
 
                     listings.append({
                         'name': name,
-                        'profile_slug': profile_slug.strip(),
-                        'profile_url': f"{self.base_url}/toronto-escorts/{profile_slug.strip()}",
+                        'profile_slug': profile_slug.strip(),  # Just the slug
+                        'profile_url': profile_slug.strip(),  # Store only the path/slug, not full URL
                         'tier': tier,
                         'location': current_location,
                         'day_of_week': current_day,
@@ -151,9 +257,11 @@ class SexyFriendsTorontoScraper:
 
         return listings
 
-    async def scrape_profile(self, profile_url: str) -> Dict:
+    async def scrape_profile(self, profile_slug: str) -> Dict:
         """Scrape individual profile page for detailed information"""
-        html = await self.fetch_page(profile_url)
+        # Build full URL from base_url and slug
+        full_profile_url = f"{self.base_url}{profile_slug}"
+        html = await self.fetch_page(full_profile_url)
         soup = BeautifulSoup(html, 'html.parser')
 
         profile_data = {}
@@ -251,13 +359,21 @@ class SexyFriendsTorontoScraper:
         if outcall_match:
             profile_data['outcall_1hr'] = int(outcall_match.group(1))
 
-        # Extract images
+        # Extract images - store only the filename/path
         images = []
         img_tags = soup.find_all('img', class_='p_gallery_img')
         for img in img_tags:
             src = img.get('src', '')
-            if src and src.startswith('http'):
-                images.append(src)
+            if src:
+                # Extract just the filename from the URL
+                # E.g., https://example.com/thumbnails/image.jpg -> image.jpg
+                if src.startswith('http'):
+                    # Extract filename from full URL
+                    filename = src.split('/')[-1]
+                    images.append(filename)
+                else:
+                    # Already a relative path
+                    images.append(src)
         profile_data['images'] = json.dumps(images)
 
         # Extract tags from profile
@@ -335,15 +451,36 @@ class SexyFriendsTorontoScraper:
 
             self.db.commit()
 
-            # Add schedule
-            schedule = Schedule(
+            # Match location string to location_id
+            location_id = self.match_location(item['location'], source.id)
+
+            # Calculate date from day of week
+            schedule_date = self.get_date_from_day_of_week(item['day_of_week'])
+
+            # Check if schedule already exists for this listing, day, and location
+            existing_schedule = self.db.query(Schedule).filter_by(
                 listing_id=listing.id,
                 day_of_week=item['day_of_week'],
-                start_time=item.get('start_time'),
-                end_time=item.get('end_time'),
-                location=item['location']
-            )
-            self.db.add(schedule)
+                location_id=location_id
+            ).first()
+
+            if existing_schedule:
+                # Update existing schedule
+                existing_schedule.date = schedule_date
+                existing_schedule.start_time = item.get('start_time')
+                existing_schedule.end_time = item.get('end_time')
+                existing_schedule.is_expired = False
+            else:
+                # Add new schedule
+                schedule = Schedule(
+                    listing_id=listing.id,
+                    day_of_week=item['day_of_week'],
+                    date=schedule_date,
+                    start_time=item.get('start_time'),
+                    end_time=item.get('end_time'),
+                    location_id=location_id
+                )
+                self.db.add(schedule)
 
         self.db.commit()
 

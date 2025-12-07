@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text, ForeignKey, Table
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text, ForeignKey, Table, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -17,12 +17,43 @@ class Source(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
-    url = Column(String, nullable=False)
+    url = Column(String, nullable=False)  # Schedule page URL
+    base_url = Column(String)  # Base URL for profiles (e.g., https://example.com/escorts/)
+    image_base_url = Column(String)  # Base URL for images (e.g., https://example.com/thumbnails/)
     active = Column(Boolean, default=True)
     last_scraped = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     listings = relationship("Listing", back_populates="source")
+    locations = relationship("Location", back_populates="source")
+
+
+class Location(Base):
+    __tablename__ = 'locations'
+
+    id = Column(Integer, primary_key=True)
+    source_id = Column(Integer, ForeignKey('sources.id'), nullable=False, index=True)
+
+    # Location details
+    town = Column(String, nullable=False, index=True)  # Vaughan, Midtown, Downtown, etc.
+    location = Column(String, nullable=False)  # Yonge & Eglinton, unknown, etc.
+    address = Column(String)  # Optional full address
+    notes = Column(Text)  # Optional notes about the location
+
+    # For matching/searching
+    is_default = Column(Boolean, default=False, index=True)  # Mark the "Unknown, unknown" as default
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    source = relationship("Source", back_populates="locations")
+    schedules = relationship("Schedule", back_populates="location")
+
+    # Composite index for location matching
+    __table_args__ = (
+        Index('ix_location_source_town_location', 'source_id', 'town', 'location'),
+    )
 
 
 class Listing(Base):
@@ -73,18 +104,19 @@ class Schedule(Base):
     __tablename__ = 'schedules'
 
     id = Column(Integer, primary_key=True)
-    listing_id = Column(Integer, ForeignKey('listings.id'))
+    listing_id = Column(Integer, ForeignKey('listings.id'), index=True)
+    location_id = Column(Integer, ForeignKey('locations.id'), index=True)  # Reference to Location table
 
-    day_of_week = Column(String)  # Monday, Tuesday, etc.
+    day_of_week = Column(String, index=True)  # Monday, Tuesday, etc. - indexed for filtering
     date = Column(DateTime)  # Actual date if known
     start_time = Column(String)  # 12PM
     end_time = Column(String)  # 12AM
-    location = Column(String)  # Specific location for this schedule
 
-    is_expired = Column(Boolean, default=False)
+    is_expired = Column(Boolean, default=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     listing = relationship("Listing", back_populates="schedules")
+    location = relationship("Location", back_populates="schedules")
 
 
 class Tag(Base):
@@ -97,7 +129,7 @@ class Tag(Base):
 
 
 # Database setup
-engine = create_engine('sqlite:///./escort_listings.db', echo=False)
+engine = create_engine('sqlite:///./data/escort_listings.db', echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():

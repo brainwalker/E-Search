@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 import json
 
-from api.database import get_db, init_db, Listing, Schedule, Source, Tag
+from api.database import get_db, init_db, Listing, Schedule, Source, Tag, Location
 from api.scraper import SexyFriendsTorontoScraper
 from api import db_viewer
 from pydantic import BaseModel
@@ -32,12 +32,23 @@ def startup_event():
 
 
 # Pydantic models for API responses
+class LocationResponse(BaseModel):
+    id: int
+    town: str
+    location: str
+    address: Optional[str]
+    notes: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
 class ScheduleResponse(BaseModel):
     id: int
     day_of_week: str
     start_time: Optional[str]
     end_time: Optional[str]
-    location: Optional[str]
+    location: Optional[LocationResponse]  # Changed to LocationResponse object
     is_expired: bool
 
     class Config:
@@ -52,10 +63,24 @@ class TagResponse(BaseModel):
         from_attributes = True
 
 
-class ListingResponse(BaseModel):
+class SourceResponse(BaseModel):
     id: int
     name: str
-    profile_url: Optional[str]
+    url: str
+    base_url: Optional[str]  # Base URL for profiles
+    image_base_url: Optional[str]  # Base URL for images
+    active: bool
+    last_scraped: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class ListingResponse(BaseModel):
+    id: int
+    source_id: int  # Include source_id
+    name: str
+    profile_url: Optional[str]  # Now stores only the slug/path
     tier: Optional[str]
     age: Optional[int]
     nationality: Optional[str]
@@ -71,24 +96,14 @@ class ListingResponse(BaseModel):
     incall_1hr: Optional[int]
     outcall_1hr: Optional[int]
     rate_notes: Optional[str]
-    images: Optional[str]
+    images: Optional[str]  # Now stores JSON array of filenames
     is_active: bool
     is_expired: bool
     created_at: datetime
     updated_at: datetime
     schedules: List[ScheduleResponse]
     tags: List[TagResponse]
-
-    class Config:
-        from_attributes = True
-
-
-class SourceResponse(BaseModel):
-    id: int
-    name: str
-    url: str
-    active: bool
-    last_scraped: Optional[datetime]
+    source: SourceResponse  # Include full source information
 
     class Config:
         from_attributes = True
@@ -264,12 +279,16 @@ async def expire_listing(listing_id: int, db: Session = Depends(get_db)):
 
 @app.delete("/api/sources/{source_id}/data")
 async def delete_source_data(source_id: int, db: Session = Depends(get_db)):
-    """Delete all listings and schedules for a specific source"""
+    """
+    Delete all listings and schedules for a specific source.
+    Preserves: Source, Locations, and Tags (they can be reused).
+    """
     source = db.query(Source).filter(Source.id == source_id).first()
     if not source:
         raise HTTPException(status_code=404, detail="Source not found")
 
     # Delete all listings for this source (cascades to schedules)
+    # Note: This does NOT delete the source itself, locations, or tags
     deleted_count = db.query(Listing).filter(Listing.source_id == source_id).delete()
     db.commit()
 

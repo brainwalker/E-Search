@@ -12,7 +12,15 @@
       "Bash(open:*)",
       "Bash(lsof:*)",
       "Bash(kill:*)",
-      "Bash(git -C /Users/shah/E-Search/backend diff HEAD -- api/main.py)"
+      "Bash(git -C /Users/shah/E-Search/backend diff HEAD -- api/main.py)",
+      "Bash(sqlite3:*)",
+      "Bash(tree:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(git push:*)",
+      "Bash(xargs kill -9)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

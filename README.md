@@ -41,17 +41,34 @@ A web application that scrapes escort listings from multiple sources, stores the
 
 ```
 E-Search/
+├── docs/                    # 📚 Documentation
+│   ├── database/           # Database documentation
+│   ├── guides/             # User guides & tutorials
+│   ├── project/            # Project documentation
+│   └── api/                # API documentation
+│
 ├── backend/
 │   ├── api/
-│   │   ├── main.py          # FastAPI application and endpoints
-│   │   ├── database.py      # Database models and configuration
-│   │   └── scraper.py       # Web scraping logic
-│   ├── requirements.txt     # Python dependencies
-│   └── escort_listings.db   # SQLite database (created on first run)
+│   │   ├── main.py         # FastAPI application and endpoints
+│   │   ├── database.py     # Database models and configuration
+│   │   ├── scraper.py      # Web scraping logic
+│   │   └── db_viewer.py    # Database viewer routes
+│   ├── data/               # 🆕 Database files
+│   │   └── escort_listings.db
+│   ├── scripts/            # 🆕 Management scripts
+│   │   ├── migrate.py      # Database migration
+│   │   └── seed_locations.py  # Seed location data
+│   └── requirements.txt    # Python dependencies
+│
 ├── frontend/
-│   └── index.html          # Single-page application
+│   ├── index.html          # Main application page
+│   └── database.html       # Database viewer page
+│
+├── .env.example            # 🆕 Environment variables template
 └── README.md
 ```
+
+> 📖 See [docs/project/structure-plan.md](docs/project/structure-plan.md) for the detailed reorganization plan and future improvements.
 
 ## Installation
 
@@ -145,10 +162,13 @@ Click the "Scrape All Sources" button in the UI to start scraping data from all 
 
 ### Tables
 1. **sources** - Scraping source configurations
-2. **listings** - Main listing data
-3. **schedules** - Availability schedules
-4. **tags** - Tags for categorization
-5. **listing_tags** - Many-to-many relationship
+2. **locations** - 🆕 Location definitions (normalized)
+3. **listings** - Main listing data
+4. **schedules** - Availability schedules (now references locations table)
+5. **tags** - Tags for categorization
+6. **listing_tags** - Many-to-many relationship
+
+> 📖 See [docs/database/schema.md](docs/database/schema.md) for complete schema documentation with SQL examples.
 
 ## Adding New Sources
 
@@ -205,8 +225,30 @@ If you see CORS errors, make sure:
 ### Database Locked
 If you get "database is locked" errors, make sure only one instance of the backend is running.
 
+## Documentation
+
+All project documentation is now organized in the `docs/` folder:
+
+### 📚 Database
+- [Database Schema](docs/database/schema.md) - Complete schema with SQL examples
+- [Locations System](docs/database/locations.md) - Location table implementation
+- [Migration Guide](docs/database/migrations.md) - Database migration instructions
+
+### 📖 Guides
+- [Quick Start Guide](docs/guides/quickstart.md) - Get up and running
+- [Git Workflow](docs/guides/git-workflow.md) - Git commands reference
+- [Branching Strategy](docs/guides/branching.md) - Branch management
+
+### 📊 Project
+- [Project Analysis](docs/project/analysis.md) - Detailed project analysis
+- [Project Summary](docs/project/summary.md) - High-level overview
+- [Structure Plan](docs/project/structure-plan.md) - Folder reorganization plan
+
 ## Future Enhancements
 
+- [ ] Split models into separate files for better organization
+- [ ] Split routes into dedicated route files
+- [ ] Add comprehensive test suite
 - [ ] Add more scraping sources
 - [ ] Implement automatic scheduled scraping
 - [ ] Add user authentication

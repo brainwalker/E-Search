@@ -860,6 +860,34 @@
             }
         }
 
+        // Helper function to build full profile URL from base URL and slug
+        function getFullProfileUrl(listing) {
+            if (!listing.profile_url) return null;
+            // If profile_url is already a full URL, return it
+            if (listing.profile_url.startsWith('http')) {
+                return listing.profile_url;
+            }
+            // Otherwise, merge with source base_url
+            const baseUrl = listing.source?.base_url || '';
+            return baseUrl + listing.profile_url;
+        }
+
+        // Helper function to build full image URLs from base URL and filenames
+        function getFullImageUrls(listing) {
+            if (!listing.images) return [];
+            const images = JSON.parse(listing.images);
+            const imageBaseUrl = listing.source?.image_base_url || '';
+
+            return images.map(img => {
+                // If image is already a full URL, return it
+                if (img.startsWith('http')) {
+                    return img;
+                }
+                // Otherwise, merge with source image_base_url
+                return imageBaseUrl + img;
+            });
+        }
+
         // Show backend offline message
         function showBackendOfflineMessage() {
             const container = document.getElementById('listingsContainer');
@@ -1020,7 +1048,7 @@
             card.style.cursor = 'pointer';
             card.onclick = () => openListingModal(listing);
 
-            const images = listing.images ? JSON.parse(listing.images) : [];
+            const images = getFullImageUrls(listing);
 
             let imagesHtml = '';
             if (images.length > 0) {
@@ -1083,7 +1111,7 @@
                     ${ratesHtml}
                     ${schedulesHtml}
                     ${tagsHtml}
-                    ${listing.profile_url ? `<button class="view-profile-btn" onclick="event.stopPropagation(); window.open('${listing.profile_url}', '_blank')">View Full Profile</button>` : ''}
+                    ${getFullProfileUrl(listing) ? `<button class="view-profile-btn" onclick="event.stopPropagation(); window.open('${getFullProfileUrl(listing)}', '_blank')">View Full Profile</button>` : ''}
                 </div>
             `;
 
@@ -1118,6 +1146,16 @@
 
         // Scrape all sources
         async function scrapeAllSources() {
+            const scrapeBtn = document.querySelector('.scrape-btn');
+            const originalText = scrapeBtn ? scrapeBtn.textContent : '';
+
+            // Update button to show progress
+            if (scrapeBtn) {
+                scrapeBtn.disabled = true;
+                scrapeBtn.textContent = '⏳ Scraping...';
+                scrapeBtn.style.opacity = '0.6';
+            }
+
             showNotification('Scraping started... This may take a few minutes.', 'success');
 
             try {
@@ -1126,14 +1164,36 @@
                 });
                 const result = await response.json();
 
-                showNotification(`Scraping completed! Found ${result.results[0].total_listings} listings.`, 'success');
+                let totalListings = 0;
+                let newListings = 0;
+
+                if (result.results && result.results.length > 0) {
+                    result.results.forEach(r => {
+                        totalListings += r.total_listings || 0;
+                        newListings += r.new_listings || 0;
+                    });
+                }
+
+                showNotification(
+                    `Scraping completed! Total: ${totalListings} listings (${newListings} new). Refreshing data...`,
+                    'success'
+                );
 
                 // Reload data
                 await loadStats();
                 await loadListings();
+
+                showNotification('Data refreshed successfully!', 'success');
             } catch (error) {
                 console.error('Error scraping:', error);
                 showNotification('Error occurred during scraping. Please try again.', 'error');
+            } finally {
+                // Restore button
+                if (scrapeBtn) {
+                    scrapeBtn.disabled = false;
+                    scrapeBtn.textContent = originalText;
+                    scrapeBtn.style.opacity = '1';
+                }
             }
         }
 
@@ -1152,7 +1212,7 @@
         // Open listing modal with full details
         function openListingModal(listing) {
             const modal = document.getElementById('listingModal');
-            const images = listing.images ? JSON.parse(listing.images) : [];
+            const images = getFullImageUrls(listing);
 
             // Build image gallery HTML
             let galleryHtml = '';
@@ -1233,9 +1293,9 @@
                     ${ratesHtml}
                     ${schedulesHtml}
                     ${tagsHtml}
-                    ${listing.profile_url ? `
+                    ${getFullProfileUrl(listing) ? `
                         <button class="view-profile-btn"
-                                onclick="event.stopPropagation(); window.open('${listing.profile_url}', '_blank')"
+                                onclick="event.stopPropagation(); window.open('${getFullProfileUrl(listing)}', '_blank')"
                                 style="margin-top: 20px; width: 100%;">
                             View Full Profile on Website
                         </button>
