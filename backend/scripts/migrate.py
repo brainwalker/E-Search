@@ -1,14 +1,6 @@
 """
-Migration script to transition from location string to locations table
-
-This script:
-1. Creates a backup of the database
-2. Drops existing tables and recreates with new schema
-3. Seeds locations table with predefined locations
-4. Ready for new scrapes with the updated schema
-
-IMPORTANT: This will delete all existing data!
-Run this when you're ready to start fresh with the new locations table.
+Automatic migration script (non-interactive)
+Transitions from location string to locations table
 """
 import os
 import shutil
@@ -106,13 +98,7 @@ def main():
     print("=" * 60)
     print("DATABASE MIGRATION: Location String to Locations Table")
     print("=" * 60)
-    print("\n⚠️  WARNING: This will delete all existing data!")
-    print("⚠️  A backup will be created automatically.\n")
-
-    response = input("Continue with migration? (yes/no): ")
-    if response.lower() != 'yes':
-        print("Migration cancelled.")
-        return
+    print("\n⚠️  This will delete all existing data and create a backup.")
 
     # Step 1: Backup
     print("\n" + "=" * 60)
@@ -136,7 +122,7 @@ def main():
     print("✅ MIGRATION COMPLETED SUCCESSFULLY!")
     print("=" * 60)
     print("\nNext steps:")
-    print("1. Start the backend server: cd backend && python -m api.main")
+    print("1. Start the backend server: cd backend && python3 -m api.main")
     print("2. Run the scraper to populate data with new location references")
     print("\nThe 'Delete all data' button will preserve sources and locations.")
 
