@@ -1,0 +1,162 @@
+"""
+Static HTML crawler using Crawlee's BeautifulSoupCrawler.
+
+This crawler is optimized for sites that don't require JavaScript rendering.
+It's faster and more resource-efficient than Playwright-based crawlers.
+"""
+
+import asyncio
+from typing import Optional, Dict, List, Callable, Any
+from bs4 import BeautifulSoup
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class StaticCrawler:
+    """
+    Wrapper for fetching static HTML pages.
+
+    Uses httpx for async HTTP requests and BeautifulSoup for parsing.
+    Provides rate limiting and error handling.
+    """
+
+    def __init__(
+        self,
+        rate_limit: float = 1.0,
+        timeout: float = 30.0,
+        max_retries: int = 3,
+        headers: Optional[Dict[str, str]] = None
+    ):
+        """
+        Initialize the static crawler.
+
+        Args:
+            rate_limit: Seconds to wait between requests
+            timeout: Request timeout in seconds
+            max_retries: Number of retries on failure
+            headers: Custom HTTP headers
+        """
+        self.rate_limit = rate_limit
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.headers = headers or {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+        self._last_request_time = 0
+
+    async def _wait_for_rate_limit(self):
+        """Wait to respect rate limit."""
+        import time
+        now = time.time()
+        elapsed = now - self._last_request_time
+        if elapsed < self.rate_limit:
+            await asyncio.sleep(self.rate_limit - elapsed)
+        self._last_request_time = time.time()
+
+    async def fetch(
+        self,
+        url: str,
+        cookies: Optional[Dict[str, str]] = None
+    ) -> str:
+        """
+        Fetch a URL and return HTML content.
+
+        Args:
+            url: URL to fetch
+            cookies: Optional cookies to send
+
+        Returns:
+            HTML content as string
+
+        Raises:
+            httpx.HTTPError: On request failure after retries
+        """
+        await self._wait_for_rate_limit()
+
+        last_error = None
+        for attempt in range(self.max_retries):
+            try:
+                async with httpx.AsyncClient(
+                    follow_redirects=True,
+                    timeout=self.timeout,
+                    headers=self.headers,
+                    cookies=cookies
+                ) as client:
+                    response = await client.get(url)
+                    response.raise_for_status()
+                    return response.text
+
+            except httpx.HTTPError as e:
+                last_error = e
+                logger.warning(f"Attempt {attempt + 1}/{self.max_retries} failed for {url}: {e}")
+                if attempt < self.max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+
+        raise last_error
+
+    async def fetch_soup(
+        self,
+        url: str,
+        cookies: Optional[Dict[str, str]] = None
+    ) -> BeautifulSoup:
+        """
+        Fetch a URL and return parsed BeautifulSoup.
+
+        Args:
+            url: URL to fetch
+            cookies: Optional cookies to send
+
+        Returns:
+            BeautifulSoup object
+        """
+        html = await self.fetch(url, cookies)
+        return BeautifulSoup(html, 'html.parser')
+
+    async def fetch_many(
+        self,
+        urls: List[str],
+        cookies: Optional[Dict[str, str]] = None
+    ) -> Dict[str, str]:
+        """
+        Fetch multiple URLs with rate limiting.
+
+        Args:
+            urls: List of URLs to fetch
+            cookies: Optional cookies to send
+
+        Returns:
+            Dictionary mapping URL to HTML content
+        """
+        results = {}
+        for url in urls:
+            try:
+                html = await self.fetch(url, cookies)
+                results[url] = html
+            except Exception as e:
+                logger.error(f"Failed to fetch {url}: {e}")
+                results[url] = None
+        return results
+
+    async def fetch_with_callback(
+        self,
+        url: str,
+        callback: Callable[[BeautifulSoup], Any],
+        cookies: Optional[Dict[str, str]] = None
+    ) -> Any:
+        """
+        Fetch a URL and process with callback.
+
+        Args:
+            url: URL to fetch
+            callback: Function to process BeautifulSoup
+            cookies: Optional cookies to send
+
+        Returns:
+            Result of callback function
+        """
+        soup = await self.fetch_soup(url, cookies)
+        return callback(soup)

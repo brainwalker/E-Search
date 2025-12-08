@@ -11,6 +11,7 @@ import logging
 from api.database import get_db, init_db, Listing, Schedule, Source, Tag, Location, Tier, listing_tags
 from api.scraper import SexyFriendsTorontoScraper
 from api.config import settings
+from scrapers.manager import ScraperManager, SCRAPER_REGISTRY
 from api import db_viewer
 from pydantic import BaseModel
 
@@ -177,9 +178,27 @@ async def get_sources(db: Session = Depends(get_db)):
 
 
 @app.post("/api/scrape/{source_name}")
-async def scrape_source(source_name: str, db: Session = Depends(get_db)):
+async def scrape_source(
+    source_name: str,
+    use_new_scraper: bool = Query(False, description="Use new Crawlee-based scraper"),
+    db: Session = Depends(get_db)
+):
     """Trigger scraping for a specific source"""
-    if source_name.lower() == "sexyfriendstoronto":
+    # Map source names to keys
+    source_map = {
+        "sexyfriendstoronto": "sft",
+        "sft": "sft",
+    }
+
+    source_key = source_map.get(source_name.lower())
+
+    if use_new_scraper and source_key and source_key in SCRAPER_REGISTRY:
+        # Use new Crawlee-based scraper
+        manager = ScraperManager(db)
+        result = await manager.scrape_site(source_key)
+        return result.to_dict()
+    elif source_name.lower() in ["sexyfriendstoronto", "sft"]:
+        # Use old scraper (default for now)
         scraper = SexyFriendsTorontoScraper(db)
         result = await scraper.scrape_and_save()
         return result
@@ -187,17 +206,40 @@ async def scrape_source(source_name: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"Scraper for {source_name} not found")
 
 
+@app.get("/api/scrapers")
+async def list_scrapers():
+    """List all available scrapers and their implementation status"""
+    manager = ScraperManager()
+    return {
+        "scrapers": manager.list_scrapers(),
+        "implemented": manager.get_implemented_scrapers()
+    }
+
+
 @app.post("/api/scrape-all")
-async def scrape_all_sources(db: Session = Depends(get_db)):
+async def scrape_all_sources(
+    use_new_scraper: bool = Query(False, description="Use new Crawlee-based scrapers"),
+    db: Session = Depends(get_db)
+):
     """Trigger scraping for all active sources"""
-    results = []
+    if use_new_scraper:
+        # Use new Crawlee-based scraper manager
+        manager = ScraperManager(db)
+        results = await manager.scrape_all()
+        return {
+            "results": [r.to_dict() for r in results.values()],
+            "summary": manager.get_results_summary()
+        }
+    else:
+        # Use old scrapers (default for now)
+        results = []
 
-    # SexyFriendsToronto
-    scraper = SexyFriendsTorontoScraper(db)
-    result = await scraper.scrape_and_save()
-    results.append(result)
+        # SexyFriendsToronto
+        scraper = SexyFriendsTorontoScraper(db)
+        result = await scraper.scrape_and_save()
+        results.append(result)
 
-    return {"results": results}
+        return {"results": results}
 
 
 def get_tier_rates_cache(db: Session) -> dict:
