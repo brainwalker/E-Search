@@ -108,7 +108,7 @@ class Schedule(Base):
     listing_id = Column(Integer, ForeignKey('listings.id'), index=True)
     location_id = Column(Integer, ForeignKey('locations.id'), nullable=False, index=True)  # Reference to Location table - always provided by scraper
 
-    day_of_week = Column(String, index=True)  # Monday, Tuesday, etc. - indexed for filtering
+    day_of_week = Column(String, nullable=False, index=True)  # Monday, Tuesday, etc. - indexed for filtering, always provided by scraper
     date = Column(DateTime)  # Actual date if known
     start_time = Column(String)  # 12PM
     end_time = Column(String)  # 12AM
