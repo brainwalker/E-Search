@@ -61,37 +61,35 @@ class Listing(Base):
     __tablename__ = 'listings'
 
     id = Column(Integer, primary_key=True)
-    source_id = Column(Integer, ForeignKey('sources.id'))
+    source_id = Column(Integer, ForeignKey('sources.id'), index=True)
 
     # Basic info
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=False, index=True)
     profile_url = Column(String)
-    tier = Column(String)  # PLATINUM VIP, ELITE, ULTRA VIP, etc.
+    tier = Column(String, index=True)  # PLATINUM VIP, ELITE, ULTRA VIP, etc.
 
     # Personal details
     age = Column(Integer)
     nationality = Column(String)
+    ethnicity = Column(String)  # Race/ethnicity (e.g., Latina, Asian, etc.)
     height = Column(String)
     weight = Column(String)
+    measurements = Column(String)  # Chest/Waist/Hips (e.g., 34DD-28-38)
     bust = Column(String)
     bust_type = Column(String)  # Natural or Enhanced
     eye_color = Column(String)
     hair_color = Column(String)
-    service_type = Column(String)  # GF ENTERTAINER, etc.
+    service_type = Column(String)  # GF ENTERTAINER, GFE, etc.
 
-    # Rates
-    incall_30min = Column(Integer)
-    incall_45min = Column(Integer)
-    incall_1hr = Column(Integer)
-    outcall_1hr = Column(Integer)
-    rate_notes = Column(Text)
+    # Note: Rates are now retrieved via the tier field from the tiers table
+    # This avoids data duplication and ensures consistent pricing
 
     # Images
     images = Column(Text)  # JSON array of image URLs
 
     # Metadata
-    is_active = Column(Boolean, default=True)
-    is_expired = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True, index=True)
+    is_expired = Column(Boolean, default=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -99,6 +97,13 @@ class Listing(Base):
     source = relationship("Source", back_populates="listings")
     schedules = relationship("Schedule", back_populates="listing", cascade="all, delete-orphan")
     tags = relationship("Tag", secondary=listing_tags, back_populates="listings")
+    
+    # Composite indexes for common query patterns
+    __table_args__ = (
+        Index('ix_listings_source_expired', 'source_id', 'is_expired'),
+        Index('ix_listings_source_tier', 'source_id', 'tier'),
+        Index('ix_listings_updated_at', 'updated_at'),
+    )
 
 
 class Schedule(Base):
@@ -156,8 +161,10 @@ class Tag(Base):
     listings = relationship("Listing", secondary=listing_tags, back_populates="tags")
 
 
-# Database setup
-engine = create_engine('sqlite:///./data/escort_listings.db', echo=False)
+# Database setup - import settings for database URL
+from api.config import settings
+
+engine = create_engine(settings.database_url, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():

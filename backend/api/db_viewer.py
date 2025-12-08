@@ -6,22 +6,47 @@ Provides web interface to browse database tables
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect, text
-from typing import Optional
+from typing import Optional, Set
 from api.database import get_db, engine
+from api.config import settings
 import logging
 from pathlib import Path
 from datetime import datetime
 
 router = APIRouter(prefix="/db", tags=["Database Viewer"])
 
-# Setup logging directory (for reading log files, not configuring logging)
-# Logging configuration is handled in main.py to avoid duplicate handlers
-LOG_DIR = Path(__file__).parent.parent.parent / "logs"
-LOG_DIR.mkdir(exist_ok=True)
-LOG_FILE = LOG_DIR / "backend.log"
+# Use settings for log file path
+LOG_FILE = settings.log_file
 
 # Get logger for this module (logging is configured in main.py)
 logger = logging.getLogger(__name__)
+
+# Whitelist of allowed table names to prevent SQL injection
+# This is populated dynamically from the database schema on first request
+_ALLOWED_TABLES: Optional[Set[str]] = None
+
+
+def get_allowed_tables() -> Set[str]:
+    """Get the set of allowed table names from the database schema."""
+    global _ALLOWED_TABLES
+    if _ALLOWED_TABLES is None:
+        inspector = inspect(engine)
+        _ALLOWED_TABLES = set(inspector.get_table_names())
+    return _ALLOWED_TABLES
+
+
+def validate_table_name(table_name: str) -> str:
+    """
+    Validate that a table name is in the allowed list.
+    Raises HTTPException if table name is not valid.
+    """
+    allowed = get_allowed_tables()
+    if table_name not in allowed:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid table name: '{table_name}'. Allowed tables: {sorted(allowed)}"
+        )
+    return table_name
 
 
 @router.get("/tables")
@@ -50,18 +75,27 @@ async def get_table_data(
 ):
     """Get data from a specific table with pagination"""
 
-    # Verify table exists
-    inspector = inspect(engine)
-    if table_name not in inspector.get_table_names():
-        return {"error": f"Table '{table_name}' not found"}
+    # Validate table name against whitelist to prevent SQL injection
+    table_name = validate_table_name(table_name)
 
-    # Get total count
+    # Get total count - table_name is now validated/safe
     count_query = text(f"SELECT COUNT(*) FROM {table_name}")
     total_count = db.execute(count_query).scalar()
 
     # Get paginated data
     offset = (page - 1) * page_size
-    data_query = text(f"SELECT * FROM {table_name} LIMIT :limit OFFSET :offset")
+    
+    # Custom column order for listings table to show important fields first
+    if table_name == 'listings':
+        columns_order = """id, name, tier, age, nationality, ethnicity, 
+                          bust, measurements, height, weight, 
+                          eye_color, hair_color, service_type, bust_type,
+                          profile_url, source_id, images, 
+                          is_active, is_expired, created_at, updated_at"""
+        data_query = text(f"SELECT {columns_order} FROM {table_name} LIMIT :limit OFFSET :offset")
+    else:
+        data_query = text(f"SELECT * FROM {table_name} LIMIT :limit OFFSET :offset")
+    
     result = db.execute(data_query, {"limit": page_size, "offset": offset})
 
     # Convert to list of dicts
@@ -124,11 +158,12 @@ async def execute_query(
 @router.get("/stats")
 async def get_db_stats(db: Session = Depends(get_db)):
     """Get database statistics"""
-    inspector = inspect(engine)
-    tables = inspector.get_table_names()
+    # Use validated table names from whitelist
+    tables = get_allowed_tables()
 
     stats = {}
-    for table_name in tables:
+    for table_name in sorted(tables):
+        # Table names are from our validated whitelist, safe to use
         count_query = text(f"SELECT COUNT(*) FROM {table_name}")
         count = db.execute(count_query).scalar()
         stats[table_name] = count
@@ -139,8 +174,9 @@ async def get_db_stats(db: Session = Depends(get_db)):
         size = db.execute(size_query).scalar()
         stats["_database_size_bytes"] = size
         stats["_database_size_mb"] = round(size / (1024 * 1024), 2)
-    except:
-        pass
+    except Exception as e:
+        # SQLite-specific query may fail on other databases
+        logger.debug(f"Could not get database size: {e}")
 
     return stats
 
@@ -177,13 +213,13 @@ async def get_logs(
                         log_dt = datetime.strptime(log_time_str, '%Y-%m-%d %H:%M:%S,%f')
                         if log_dt >= since_dt:
                             filtered_lines.append(line)
-                    except:
+                    except (ValueError, IndexError):
                         # If we can't parse timestamp, include the line
                         filtered_lines.append(line)
                 all_lines = filtered_lines
-            except Exception as e:
-                # If timestamp parsing fails, return all lines
-                pass
+            except ValueError as e:
+                # If timestamp parsing fails, log and return all lines
+                logger.debug(f"Could not parse 'since' timestamp: {e}")
         
         # Get last N lines
         logs = all_lines[-lines:] if len(all_lines) > lines else all_lines
