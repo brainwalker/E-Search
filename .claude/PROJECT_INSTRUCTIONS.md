@@ -2,14 +2,43 @@
 
 ## ⚠️ IMPORTANT: Git Branch
 
-**ALWAYS work on the `Cursed-Cursor` branch when using Cursor/Claude.**
+**Default branch: `Cursed-Cursor`** - Use for general development.
+**Scraper migration branch: `Crawl4AI`** - Use for Crawlee/Camoufox migration work.
 
 Before making any changes:
-1. Verify you're on the correct branch: `git branch --show-current` should show `Cursed-Cursor`
-2. If not on the correct branch, switch: `git checkout Cursed-Cursor`
-3. All commits and changes should be made to `Cursed-Cursor` branch only
+1. Verify you're on the correct branch: `git branch --show-current`
+2. For scraper work, use `Crawl4AI` branch
+3. For other work, use `Cursed-Cursor` branch
 
-**Do NOT make changes to other branches** (like `naughty-mirzakhani` or `dev`) unless explicitly requested.
+## 🚀 Current Project: Crawlee Migration
+
+We are migrating the scraper system from `httpx + BeautifulSoup` to `Crawlee + Camoufox` to support 14 escort listing sources.
+
+**Full Plan:** [docs/guides/crawlee-migration-plan.md](docs/guides/crawlee-migration-plan.md)
+
+### Target Sources (14 total)
+
+| # | Site | Short | Type | Status |
+|---|------|-------|------|--------|
+| 1 | sexyfriendstoronto.com | SFT | Static | ✅ Current |
+| 2 | discreetdolls.com | DD | Stealth | ⏳ Pending |
+| 3 | mirage-entertainment.cc | MIRAGE | JavaScript | ⏳ Pending |
+| 4 | hiddengemescorts.ca | HGE | Stealth | ⏳ Pending |
+| 5 | secretescorts.ca | SECRET | Static | ⏳ Pending |
+| 6 | topdrawerladies.com | TDL | JavaScript | ⏳ Pending |
+| 7 | selectcompanyescorts.com | SELECT | Static | ⏳ Pending |
+| 8 | hotpinklist.com | HPL | JavaScript | ⏳ Pending |
+| 9 | torontogirlfriends.com | TGF | Stealth | ⏳ Pending |
+| 10 | torontopassions.com | PASSIONS | JavaScript | ⏳ Pending |
+| 11 | allegraescortscollective.com | ALLEGRA | Static | ⏳ Pending |
+| 12 | highsocietygirls.ca | HSG | Static | ⏳ Pending |
+| 13 | gardenofedenescorts.com | EDEN | Static | ⏳ Pending |
+| 14 | cupidsescorts.ca | CUPIDS | Static | ⏳ Pending |
+
+### Scraper Types
+- **Static (7):** Fast, uses BeautifulSoupCrawler
+- **JavaScript (4):** Uses PlaywrightCrawler for JS rendering
+- **Stealth (3):** Uses Camoufox for anti-bot bypass
 
 ## Project Structure
 
@@ -20,40 +49,58 @@ E-Search/
 ├── docs/                    # 📚 ALL documentation
 │   ├── database/           # Database-related docs
 │   ├── guides/             # User guides and tutorials
+│   │   └── crawlee-migration-plan.md  # 🆕 Scraper migration plan
 │   ├── project/            # Project information
 │   └── api/                # API documentation
 │
 ├── backend/
 │   ├── api/
-│   │   ├── models/         # Database models (future split)
-│   │   ├── routes/         # API route handlers (future split)
-│   │   ├── schemas/        # Pydantic schemas (future split)
-│   │   ├── services/       # Business logic (future split)
-│   │   ├── core/           # Core utilities (future split)
-│   │   ├── utils/          # Utility functions (future split)
 │   │   ├── main.py         # FastAPI application
 │   │   ├── database.py     # Database models
-│   │   ├── scraper.py      # Scraper service
+│   │   ├── scraper.py      # OLD scraper (keep for reference)
+│   │   ├── config.py       # Configuration
 │   │   └── db_viewer.py    # DB viewer routes
 │   │
+│   ├── scrapers/           # 🆕 NEW Crawlee-based scrapers
+│   │   ├── __init__.py
+│   │   ├── base.py         # BaseScraper abstract class
+│   │   ├── manager.py      # ScraperManager orchestration
+│   │   ├── config.py       # Site configurations (14 sites)
+│   │   │
+│   │   ├── crawlers/       # Crawler implementations
+│   │   │   ├── static.py   # BeautifulSoupCrawler (fast)
+│   │   │   ├── javascript.py # PlaywrightCrawler (JS)
+│   │   │   └── stealth.py  # Camoufox (anti-bot)
+│   │   │
+│   │   ├── sites/          # Per-site scrapers
+│   │   │   ├── sft.py      # SexyFriendsToronto
+│   │   │   ├── discreet_dolls.py
+│   │   │   ├── mirage.py
+│   │   │   └── ... (14 total)
+│   │   │
+│   │   └── utils/          # Shared utilities
+│   │       ├── extractors.py
+│   │       └── normalizers.py
+│   │
 │   ├── data/               # Database files
-│   │   ├── .gitignore
 │   │   └── escort_listings.db
 │   │
 │   ├── scripts/            # Management scripts
 │   │   ├── migrate.py
 │   │   └── seed_locations.py
 │   │
-│   ├── tests/              # Test suite (future)
+│   ├── tests/              # Test suite
+│   ├── worker.py           # 🆕 Background job worker
 │   └── requirements.txt
 │
 ├── frontend/
-│   ├── assets/             # Static assets (future)
 │   ├── index.html
 │   └── database.html
 │
-├── .env.example            # Environment template
-├── .gitignore
+├── docker-compose.yml      # 🆕 Docker orchestration
+├── Dockerfile              # 🆕 Backend container
+├── Dockerfile.scraper      # 🆕 Scraper worker container
+├── .env.example
 └── README.md
 ```
 

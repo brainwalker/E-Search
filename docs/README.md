@@ -18,6 +18,8 @@ Welcome to the E-Search documentation! This directory contains all project docum
 - [Sync Guide](guides/sync-guide.md) - Using the sync command
 - [Git Workflow](guides/git-workflow.md) - Git commands and workflow
 - [Branching Strategy](guides/branching.md) - Branch management guide
+- [Crawlee Migration Plan](guides/crawlee-migration-plan.md) - **NEW** Multi-source scraper migration
+- [Site Implementation Checklist](guides/site-implementation-checklist.md) - **NEW** Per-site progress tracking
 
 ### 📊 Project Information
 - [Project Analysis](project/analysis.md) - Detailed project analysis
@@ -44,7 +46,9 @@ docs/
 │   ├── quickstart.md
 │   ├── sync-guide.md
 │   ├── git-workflow.md
-│   └── branching.md
+│   ├── branching.md
+│   ├── crawlee-migration-plan.md  # 🆕
+│   └── site-implementation-checklist.md  # 🆕
 │
 ├── project/           # Project documentation
 │   ├── analysis.md

@@ -20,7 +20,13 @@
       "Bash(git push)",
       "Bash(git push:*)",
       "Bash(xargs kill -9)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git -C /Users/shah/E-Search log --oneline -10)",
+      "Bash(git -C /Users/shah/E-Search branch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git rev-parse:*)"
     ],
     "deny": [],
     "ask": []
