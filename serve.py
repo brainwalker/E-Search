@@ -24,18 +24,109 @@ def start_backend():
     print("Starting backend server...")
 
     backend_dir = Path(__file__).parent / 'backend'
-    venv_python = backend_dir / '.venv' / 'bin' / 'python'
+    venv_dir = backend_dir / '.venv'
+    venv_bin = venv_dir / 'bin'
+    
+    # Try to find Python executable in venv (could be python, python3, or python3.x)
+    venv_python = None
+    if venv_bin.exists():
+        for python_name in ['python', 'python3', f'python{sys.version_info.major}', f'python{sys.version_info.major}.{sys.version_info.minor}']:
+            candidate = venv_bin / python_name
+            if candidate.exists():
+                # Verify the Python actually works (not a broken symlink)
+                try:
+                    result = subprocess.run(
+                        [str(candidate), '--version'],
+                        capture_output=True,
+                        timeout=2
+                    )
+                    if result.returncode == 0:
+                        venv_python = candidate
+                        break
+                except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+                    # Broken symlink or non-executable, skip it
+                    continue
 
-    if not venv_python.exists():
-        print("Virtual environment not found. Creating...")
-        subprocess.run([sys.executable, '-m', 'venv', str(backend_dir / '.venv')])
+    if not venv_python or not venv_python.exists():
+        print("Virtual environment not found or broken. Creating...")
+        
+        # Remove broken venv if it exists
+        if venv_dir.exists():
+            print("Removing existing virtual environment...")
+            import shutil
+            try:
+                shutil.rmtree(venv_dir)
+                time.sleep(0.5)  # Brief pause after removal
+            except Exception as e:
+                print(f"⚠️  Warning: Could not remove existing venv: {e}")
+                print("   Attempting to continue anyway...")
+        
+        # Create venv with better error handling
+        print(f"Creating virtual environment with {sys.executable}...")
+        try:
+            result = subprocess.run(
+                [sys.executable, '-m', 'venv', str(venv_dir)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            print("✅ Virtual environment created successfully")
+        except subprocess.TimeoutExpired:
+            print("❌ Error: Virtual environment creation timed out")
+            return None
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error creating virtual environment:")
+            print(f"   Command: {' '.join(e.cmd)}")
+            print(f"   Return code: {e.returncode}")
+            if e.stdout:
+                print(f"   stdout: {e.stdout}")
+            if e.stderr:
+                print(f"   stderr: {e.stderr}")
+            print("\n💡 Try creating the venv manually:")
+            print(f"   cd {backend_dir}")
+            print(f"   {sys.executable} -m venv .venv")
+            print(f"   .venv/bin/pip install -r requirements.txt")
+            return None
+        except Exception as e:
+            print(f"❌ Unexpected error creating virtual environment: {e}")
+            return None
+        
+        # Wait a moment for venv to be fully created
+        time.sleep(2)
+        
+        # Find the Python executable again
+        for python_name in ['python', 'python3', f'python{sys.version_info.major}', f'python{sys.version_info.major}.{sys.version_info.minor}']:
+            candidate = venv_bin / python_name
+            if candidate.exists():
+                venv_python = candidate
+                break
+        
+        if not venv_python or not venv_python.exists():
+            print("❌ Error: Could not find Python executable in virtual environment")
+            print(f"   Looking in: {venv_bin}")
+            print(f"   Available files: {list(venv_bin.iterdir()) if venv_bin.exists() else 'Directory does not exist'}")
+            return None
 
         print("Installing dependencies...")
-        subprocess.run([str(venv_python), '-m', 'pip', 'install', '-q', '-r', str(backend_dir / 'requirements.txt')])
+        try:
+            subprocess.run(
+                [str(venv_python), '-m', 'pip', 'install', '-q', '-r', str(backend_dir / 'requirements.txt')],
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Error installing dependencies: {e}")
+            return None
 
+    # Verify venv_python exists before starting
+    if not venv_python or not venv_python.exists():
+        print("❌ Error: Python executable not found in virtual environment")
+        return None
+    
     # Start uvicorn
+    print(f"Starting backend with: {venv_python}")
     process = subprocess.Popen(
-        [str(venv_python), '-m', 'uvicorn', 'api.main:app', '--host', '0.0.0.0', '--port', '8000'],
+        [str(venv_python), '-m', 'uvicorn', 'api.main:app', '--host', '0.0.0.0', '--port', '8000', '--reload'],
         cwd=str(backend_dir),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
@@ -58,16 +149,28 @@ def serve_frontend():
     import threading
 
     frontend_dir = Path(__file__).parent / 'frontend'
-    os.chdir(frontend_dir)
-
-    class Handler(SimpleHTTPRequestHandler):
+    frontend_dir_abs = str(frontend_dir.absolute())
+    
+    class FrontendHandler(SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            # Python 3.7+ supports directory parameter - use it directly
+            super().__init__(*args, directory=frontend_dir_abs, **kwargs)
+        
         def log_message(self, format, *args):
             pass  # Suppress logs
+        
+        def end_headers(self):
+            # Add CORS headers
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+            super().end_headers()
 
-    server = HTTPServer(('localhost', 8080), Handler)
+    server = HTTPServer(('localhost', 8080), FrontendHandler)
 
     def run_server():
         print("✅ Frontend server started on http://localhost:8080")
+        print(f"   Serving from: {frontend_dir}")
         server.serve_forever()
 
     thread = threading.Thread(target=run_server, daemon=True)

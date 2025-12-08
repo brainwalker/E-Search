@@ -148,12 +148,49 @@ class SexyFriendsTorontoScraper:
 
     def extract_tier(self, text: str) -> Optional[str]:
         """Extract tier from listing text (PLATINUM VIP, ELITE, ULTRA VIP, etc.)"""
-        tiers = ['PLATINUM VIP', 'ULTRA VIP', 'ELITE', 'VIP']
+        # Check higher tiers first so we don't default to ELITE when more specific exists
+        tiers = ['PLATINUM VIP', 'ULTRA VIP', 'VIP', 'ELITE']
         text_upper = text.upper()
         for tier in tiers:
             if tier in text_upper:
                 return tier
         return None
+
+    def normalize_weight(self, weight_text: str) -> Optional[str]:
+        """Convert weight like '130 lbs' to rounded kg string (e.g., '59 kg')"""
+        try:
+            lbs_match = re.search(r'(\d+)', weight_text)
+            if not lbs_match:
+                return weight_text.strip()
+            lbs = int(lbs_match.group(1))
+            kg = round(lbs * 0.453592)
+            return f"{kg} kg"
+        except Exception:
+            return weight_text.strip()
+
+    def normalize_bust(self, bust_text: str) -> Optional[str]:
+        """
+        Normalize bust measurements:
+        - 34C-2636 -> 34C-26-36
+        - 34C26-36 -> 34C-26-36
+        """
+        if not bust_text:
+            return bust_text
+
+        bust_text = bust_text.strip()
+
+        # Already in good format
+        if re.match(r'^\d{2}[A-Z]-\d{2}-\d{2}$', bust_text, re.IGNORECASE):
+            return bust_text
+
+        compact_match = re.match(r'^(\d{2}[A-Z])[-\s]?(\d{2})(\d{2})$', bust_text, re.IGNORECASE)
+        if compact_match:
+            cup = compact_match.group(1)
+            waist = compact_match.group(2)
+            hip = compact_match.group(3)
+            return f"{cup}-{waist}-{hip}"
+
+        return bust_text
 
     def parse_schedule_page(self, html: str) -> List[Dict]:
         """Parse the schedule page and extract all listings"""
@@ -291,24 +328,39 @@ class SexyFriendsTorontoScraper:
             bust_measurements = bust_match.group(1).strip()
             bust_type = bust_match.group(2)
 
-            profile_data['bust'] = bust_measurements
+            profile_data['bust'] = self.normalize_bust(bust_measurements)
 
             # Extract bust type (Natural or Enhanced)
             if bust_type:
                 profile_data['bust_type'] = bust_type.capitalize()
             else:
-                profile_data['bust_type'] = None
+                # Try to infer bust type from text if not explicitly stated
+                if 'enhanced' in text.lower():
+                    profile_data['bust_type'] = 'Enhanced'
+                elif 'natural' in text.lower():
+                    profile_data['bust_type'] = 'Natural'
+                else:
+                    profile_data['bust_type'] = None
 
         # Extract height (formats: 5'9, 5'9", 5 ft 9, etc.)
         # Handles various quote chars: ' ′ ' ' ` ´ and HTML entity &rsquo; (BeautifulSoup usually decodes it to U+2019)
         height_match = re.search(r"Height:\s*(\d+(?:['′''`´']|&rsquo;)\d*[\"″]?)", text, re.IGNORECASE)
         if height_match:
             profile_data['height'] = height_match.group(1).strip()
+        else:
+            # Try alternative formats: 5 ft 9, 170 cm
+            height_alt = re.search(r"Height:\s*(\d+\s*ft\s*\d+\s*in)", text, re.IGNORECASE)
+            if height_alt:
+                profile_data['height'] = height_alt.group(1).strip()
+            else:
+                cm_match = re.search(r"Height:\s*([0-9]{2,3}\s*cm)", text, re.IGNORECASE)
+                if cm_match:
+                    profile_data['height'] = cm_match.group(1).strip()
 
         # Extract weight (stop at next field)
         weight_match = re.search(r'Weight:\s*([\d\s]+lbs?)', text, re.IGNORECASE)
         if weight_match:
-            profile_data['weight'] = weight_match.group(1).strip()
+            profile_data['weight'] = self.normalize_weight(weight_match.group(1))
 
         # Extract eye color
         eyes_match = re.search(r'Eyes?:\s*([A-Za-z\s]+?)(?:Hair|GF|PSE|MASSAGE|\n|$)', text, re.IGNORECASE)

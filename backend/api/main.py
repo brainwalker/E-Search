@@ -5,11 +5,30 @@ from sqlalchemy import and_, or_
 from typing import List, Optional
 from datetime import datetime, timedelta
 import json
+import logging
+from pathlib import Path
 
-from api.database import get_db, init_db, Listing, Schedule, Source, Tag, Location
+from api.database import get_db, init_db, Listing, Schedule, Source, Tag, Location, Tier
 from api.scraper import SexyFriendsTorontoScraper
 from api import db_viewer
 from pydantic import BaseModel
+
+# Setup logging
+LOG_DIR = Path(__file__).parent.parent.parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / "backend.log"
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE, encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="E-Search API", version="1.0.0")
 
@@ -28,7 +47,13 @@ app.add_middleware(
 # Initialize database on startup
 @app.on_event("startup")
 def startup_event():
+    logger.info("=" * 60)
+    logger.info("E-Search Backend Starting Up")
+    logger.info("=" * 60)
+    logger.info(f"Log file: {LOG_FILE}")
     init_db()
+    logger.info("Database initialized successfully")
+    logger.info("Backend ready to accept requests")
 
 
 # Pydantic models for API responses
@@ -233,6 +258,34 @@ async def get_tags(db: Session = Depends(get_db)):
     """Get all available tags"""
     tags = db.query(Tag).all()
     return tags
+
+
+# Pydantic model for Tier response
+class TierResponse(BaseModel):
+    id: int
+    source_id: int
+    tier: str
+    star: int
+    incall_30min: Optional[str]
+    incall_45min: Optional[str]
+    incall_1hr: Optional[str]
+    outcall_per_hr: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+@app.get("/api/tiers", response_model=List[TierResponse])
+async def get_tiers(
+    source_id: Optional[int] = Query(None, description="Filter by source ID"),
+    db: Session = Depends(get_db)
+):
+    """Get all available tiers, optionally filtered by source"""
+    query = db.query(Tier)
+    if source_id:
+        query = query.filter(Tier.source_id == source_id)
+    tiers = query.order_by(Tier.star).all()
+    return tiers
 
 
 @app.get("/api/stats")

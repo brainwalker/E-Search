@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>E-Search - Escort Listing Aggregator</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
     <style>
         * {
             margin: 0;
@@ -187,9 +188,15 @@
         .listing-card {
             background: white;
             border-radius: 15px;
-            overflow: hidden;
+            overflow: visible;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             transition: transform 0.3s, box-shadow 0.3s;
+            position: relative;
+        }
+        
+        .listing-card .listing-body {
+            overflow: hidden;
+            border-radius: 0 0 15px 15px;
         }
 
         .listing-card:hover {
@@ -197,16 +204,77 @@
             box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
         }
 
+        .listing-actions {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: flex !important;
+            gap: 6px;
+            z-index: 1000;
+            pointer-events: auto;
+        }
+
+        .listing-action-btn {
+            width: 38px;
+            height: 38px;
+            border: 2px solid rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+            opacity: 1 !important;
+            visibility: visible !important;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1001;
+        }
+
+        .listing-action-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .listing-action-btn.refresh {
+            background: #10b981;
+            color: white;
+        }
+
+        .listing-action-btn.refresh:hover {
+            background: #059669;
+        }
+
+        .listing-action-btn.delete {
+            background: #ef4444;
+            color: white;
+        }
+
+        .listing-action-btn.delete:hover {
+            background: #dc2626;
+        }
+
+        .listing-action-btn:active {
+            transform: scale(0.95);
+        }
+
         .listing-header {
             padding: 20px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            position: relative;
+            border-radius: 15px 15px 0 0;
+            z-index: 1;
+            overflow: visible;
         }
 
         .listing-name {
             font-size: 1.5rem;
             font-weight: bold;
             margin-bottom: 5px;
+            margin-top: 0;
         }
 
         .listing-tier {
@@ -216,6 +284,7 @@
 
         .listing-body {
             padding: 20px;
+            overflow: hidden;
         }
 
         .listing-detail {
@@ -397,6 +466,10 @@
 
         .notification.error {
             border-left: 4px solid #ef4444;
+        }
+
+        .notification.info {
+            border-left: 4px solid #3b82f6;
         }
 
         /* Modal styles */
@@ -888,6 +961,19 @@
             });
         }
 
+        // Helper function to format location object for display
+        function formatLocation(locationObj) {
+            if (!locationObj) return '';
+            // If it's already a string (backward compatibility), return as-is
+            if (typeof locationObj === 'string') return locationObj;
+            // If it's an object, format as "Town, Location"
+            if (locationObj.town && locationObj.location) {
+                return `${locationObj.town}, ${locationObj.location}`;
+            }
+            // Fallback to just town or location if one is missing
+            return locationObj.town || locationObj.location || '';
+        }
+
         // Show backend offline message
         function showBackendOfflineMessage() {
             const container = document.getElementById('listingsContainer');
@@ -1043,6 +1129,7 @@
         function createListingCard(listing) {
             const card = document.createElement('div');
             card.className = 'listing-card';
+            card.setAttribute('data-listing-id', listing.id);
 
             // Make card clickable to open modal
             card.style.cursor = 'pointer';
@@ -1075,12 +1162,15 @@
                 schedulesHtml = `
                     <div class="schedule-section">
                         <div class="schedule-title">Schedule</div>
-                        ${listing.schedules.slice(0, 3).map(schedule => `
+                        ${listing.schedules.slice(0, 3).map(schedule => {
+                            const locationStr = formatLocation(schedule.location);
+                            return `
                             <div class="schedule-item">
-                                <div class="schedule-day">${schedule.day_of_week} ${schedule.location ? `- ${schedule.location}` : ''}</div>
+                                <div class="schedule-day">${schedule.day_of_week}${locationStr ? ` - ${locationStr}` : ''}</div>
                                 <div class="schedule-time">${schedule.start_time || ''} ${schedule.end_time ? `- ${schedule.end_time}` : ''}</div>
                             </div>
-                        `).join('')}
+                        `;
+                        }).join('')}
                     </div>
                 `;
             }
@@ -1096,6 +1186,14 @@
 
             card.innerHTML = `
                 <div class="listing-header">
+                    <div class="listing-actions">
+                        <button class="listing-action-btn refresh" onclick="event.stopPropagation(); refreshListing(${listing.id})" title="Refresh this listing">
+                            🔄
+                        </button>
+                        <button class="listing-action-btn delete" onclick="event.stopPropagation(); deleteListing(${listing.id})" title="Delete this listing">
+                            🗑️
+                        </button>
+                    </div>
                     <div class="listing-name">${listing.name}</div>
                     <div class="listing-tier">${listing.tier || 'Standard'}</div>
                 </div>
@@ -1179,7 +1277,7 @@
                     'success'
                 );
 
-                // Reload data
+                // Auto-refresh data after scraping
                 await loadStats();
                 await loadListings();
 
@@ -1194,6 +1292,76 @@
                     scrapeBtn.textContent = originalText;
                     scrapeBtn.style.opacity = '1';
                 }
+            }
+        }
+
+        // Refresh a single listing
+        async function refreshListing(listingId) {
+            try {
+                showNotification('Refreshing listing...', 'info');
+                
+                // Fetch the updated listing from API
+                const response = await fetch(`${API_BASE}/api/listings/${listingId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch listing');
+                }
+                
+                const updatedListing = await response.json();
+                
+                // Find and update the card in the DOM
+                const cards = document.querySelectorAll('.listing-card');
+                cards.forEach(card => {
+                    const cardId = card.getAttribute('data-listing-id');
+                    if (cardId == listingId) {
+                        // Replace the card with updated data
+                        const newCard = createListingCard(updatedListing);
+                        card.replaceWith(newCard);
+                    }
+                });
+                
+                showNotification('Listing refreshed successfully!', 'success');
+            } catch (error) {
+                console.error('Error refreshing listing:', error);
+                showNotification('Failed to refresh listing. Please try again.', 'error');
+            }
+        }
+
+        // Delete a listing
+        async function deleteListing(listingId) {
+            if (!confirm(`Are you sure you want to delete this listing? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                showNotification('Deleting listing...', 'info');
+                
+                const response = await fetch(`${API_BASE}/api/listings/${listingId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to delete listing');
+                }
+                
+                // Remove the card from the DOM
+                const cards = document.querySelectorAll('.listing-card');
+                cards.forEach(card => {
+                    const cardId = card.getAttribute('data-listing-id');
+                    if (cardId == listingId) {
+                        card.style.transition = 'opacity 0.3s, transform 0.3s';
+                        card.style.opacity = '0';
+                        card.style.transform = 'scale(0.9)';
+                        setTimeout(() => card.remove(), 300);
+                    }
+                });
+                
+                // Update stats
+                await loadStats();
+                
+                showNotification('Listing deleted successfully!', 'success');
+            } catch (error) {
+                console.error('Error deleting listing:', error);
+                showNotification('Failed to delete listing. Please try again.', 'error');
             }
         }
 
@@ -1249,14 +1417,17 @@
                 schedulesHtml = `
                     <div class="modal-section">
                         <h3>Schedule</h3>
-                        ${listing.schedules.map(schedule => `
+                        ${listing.schedules.map(schedule => {
+                            const locationStr = formatLocation(schedule.location);
+                            return `
                             <div class="modal-detail">
                                 <strong>${schedule.day_of_week}</strong>
-                                ${schedule.location ? `at ${schedule.location}` : ''}
-                                ${schedule.start_time ? `- ${schedule.start_time}` : ''}
-                                ${schedule.end_time ? `to ${schedule.end_time}` : ''}
+                                ${locationStr ? ` at ${locationStr}` : ''}
+                                ${schedule.start_time ? ` - ${schedule.start_time}` : ''}
+                                ${schedule.end_time ? ` to ${schedule.end_time}` : ''}
                             </div>
-                        `).join('')}
+                        `;
+                        }).join('')}
                     </div>
                 `;
             }

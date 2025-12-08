@@ -26,6 +26,7 @@ class Source(Base):
 
     listings = relationship("Listing", back_populates="source")
     locations = relationship("Location", back_populates="source")
+    tiers = relationship("Tier", back_populates="source")
 
 
 class Location(Base):
@@ -117,6 +118,33 @@ class Schedule(Base):
 
     listing = relationship("Listing", back_populates="schedules")
     location = relationship("Location", back_populates="schedules")
+
+
+class Tier(Base):
+    __tablename__ = 'tiers'
+
+    id = Column(Integer, primary_key=True)
+    source_id = Column(Integer, ForeignKey('sources.id'), nullable=False, index=True)
+
+    # Tier details
+    tier = Column(String, nullable=False)  # Elite, VIP, Ultra VIP, Platinum VIP
+    star = Column(Integer, nullable=False)  # 1, 2, 3, 4
+    incall_30min = Column(String)  # Price as string (e.g., "$160")
+    incall_45min = Column(String)  # Price as string (e.g., "$200")
+    incall_1hr = Column(String)  # Price as string (e.g., "$250")
+    outcall_per_hr = Column(String)  # Price as string (e.g., "$270" or "Unknown")
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    source = relationship("Source", back_populates="tiers")
+
+    # Composite index for tier lookup
+    __table_args__ = (
+        Index('ix_tier_source_tier', 'source_id', 'tier'),
+        Index('ix_tier_source_star', 'source_id', 'star'),
+    )
 
 
 class Tag(Base):

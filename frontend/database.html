@@ -3,7 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>E-Search - Database Viewer</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
     <style>
         * {
             margin: 0;
@@ -32,6 +36,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
         }
 
         h1 {
@@ -54,32 +60,83 @@
             color: white;
         }
 
+        .header-actions {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .refresh-btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .refresh-btn:active {
+            transform: translateY(0);
+        }
+
+        .refresh-btn.refreshing {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .refresh-icon {
+            display: inline-block;
+            font-size: 16px;
+            transition: transform 0.3s;
+        }
+
+        .refresh-btn.refreshing .refresh-icon {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         .stats-row {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 8px;
+            margin-bottom: 10px;
         }
 
         .stat-card {
             background: white;
-            padding: 20px;
+            padding: 10px 12px;
             border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
             text-align: center;
         }
 
         .stat-number {
-            font-size: 1.8rem;
-            font-weight: bold;
+            font-size: 1.25rem;
+            font-weight: 700;
             color: #667eea;
+            line-height: 1.2;
         }
 
         .stat-label {
             color: #666;
-            font-size: 0.9rem;
-            margin-top: 5px;
+            font-size: 0.8rem;
+            margin-top: 4px;
             text-transform: uppercase;
+            letter-spacing: 0.4px;
         }
 
         .controls {
@@ -90,11 +147,16 @@
             margin-bottom: 30px;
         }
 
+        /* Remove old query-section styles as we're using collapsible-section now */
+        .query-section {
+            /* Styles moved to collapsible-section */
+        }
+
         .table-list {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 15px;
         }
 
         .table-btn {
@@ -106,6 +168,35 @@
             transition: all 0.3s;
             font-weight: 600;
             color: #333;
+        }
+
+        .offline-banner {
+            display: none;
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .offline-banner .retry-btn {
+            padding: 8px 14px;
+            border: none;
+            background: #ef4444;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .offline-banner .retry-btn:hover {
+            background: #dc2626;
         }
 
         .table-btn:hover {
@@ -135,6 +226,7 @@
             font-size: 0.95rem;
             resize: vertical;
             min-height: 100px;
+            box-sizing: border-box;
         }
 
         textarea:focus {
@@ -169,6 +261,7 @@
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             overflow: auto;
+            min-height: 400px;
         }
 
         .table-info {
@@ -187,6 +280,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 0.9rem;
+            table-layout: auto;
         }
 
         th {
@@ -198,11 +292,21 @@
             position: sticky;
             top: 0;
             z-index: 10;
+            min-width: 100px;
+            max-width: 500px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         td {
             padding: 10px 12px;
             border-bottom: 1px solid #e0e0e0;
+            min-width: 100px;
+            max-width: 500px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            word-wrap: break-word;
         }
 
         tr:hover {
@@ -315,15 +419,627 @@
             border-radius: 8px;
             overflow: auto;
         }
+
+        .logs-section {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        /* Move logs controls to collapsible header */
+        .logs-controls-sticky {
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 200;
+            padding: 12px 0;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #e0e0e0;
+            margin-top: -20px;
+            margin-left: -20px;
+            margin-right: -20px;
+            padding-left: 20px;
+            padding-right: 20px;
+        }
+
+        .collapsible-section .logs-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        /* Ensure buttons don't wrap awkwardly */
+        .collapsible-header {
+            min-height: 44px;
+        }
+
+        .logs-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .logs-container {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            max-height: 500px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            line-height: 1.5;
+            position: relative;
+        }
+
+        .log-line {
+            margin: 2px 0;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+
+        .log-line.error {
+            color: #f48771;
+        }
+
+        .log-line.warning {
+            color: #cca700;
+        }
+
+        .log-line.info {
+            color: #4ec9b0;
+        }
+
+        .log-line.debug {
+            color: #9cdcfe;
+        }
+
+        .logs-status {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .auto-scroll-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+
+        .auto-scroll-indicator.paused {
+            background: #ef4444;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .collapsible-section {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .collapsible-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            padding: 12px 15px;
+            margin: -20px -20px 0 -20px;
+            border-radius: 15px 15px 0 0;
+            transition: background 0.2s;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .collapsible-header:hover {
+            background: #f8f9fa;
+        }
+
+        .collapsible-section.collapsed .collapsible-header {
+            border-radius: 15px;
+            margin-bottom: 0;
+        }
+
+        .collapsible-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            flex: 1;
+        }
+
+        .collapse-icon {
+            font-size: 0.9rem;
+            transition: transform 0.3s;
+            color: #667eea;
+            display: inline-block;
+            width: 16px;
+            text-align: center;
+        }
+
+        .collapsible-section.collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+
+        .collapsible-content {
+            max-height: 2000px;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out, margin 0.3s ease-out;
+            opacity: 1;
+            margin-top: 15px;
+        }
+
+        .collapsible-section.collapsed .collapsible-content {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            overflow: hidden;
+        }
+
+        .collapsible-content-inner {
+            padding: 0;
+        }
+
+        .main-content {
+            display: flex;
+            gap: 20px;
+            position: relative;
+        }
+
+        .sidebar-toggle {
+            position: fixed;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1001;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 0 8px 8px 0;
+            padding: 15px 8px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            height: fit-content;
+        }
+
+        .sidebar-toggle:hover {
+            transform: translateY(-50%) translateX(5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .sidebar-toggle.expanded {
+            left: 0;
+        }
+
+        .sidebar-wrapper {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            width: 350px;
+            min-width: 260px;
+            max-width: 720px;
+            transition: width 0.2s ease;
+            overflow: visible;
+        }
+
+        .left-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            position: sticky;
+            top: 20px;
+            transition: opacity 0.2s ease;
+        }
+
+        .left-sidebar.collapsed,
+        .sidebar-wrapper.collapsed {
+            width: 0 !important;
+            min-width: 0 !important;
+            max-width: 0 !important;
+            opacity: 0;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+        }
+
+        .sidebar-resizer {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            right: -5px;
+            width: 10px;
+            cursor: col-resize;
+            background: rgba(0, 0, 0, 0.05);
+            z-index: 1300;
+            opacity: 0.6;
+        }
+
+        .sidebar-resizer:hover {
+            background: rgba(102, 126, 234, 0.35);
+            opacity: 1;
+        }
+
+        .main-content-wrapper {
+            flex: 1;
+            min-width: 0;
+        }
+
+        @media (max-width: 1200px) {
+            .left-sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                height: 100vh;
+                z-index: 999;
+                background: white;
+                padding: 20px;
+                box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+                transform: translateX(0);
+            }
+
+            .left-sidebar.collapsed {
+                transform: translateX(-100%);
+            }
+
+            .sidebar-toggle {
+                position: fixed;
+                left: 0;
+                top: 50%;
+                transform: translateY(-50%);
+            }
+
+            .sidebar-toggle.collapsed {
+                left: 0;
+            }
+        }
+
+        .tables-section {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Improve source cards in collapsible section */
+        .collapsible-section #sourcesList > div {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            min-width: 250px;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s;
+        }
+
+        .collapsible-section #sourcesList > div:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+        }
+
+        /* Better spacing for query section */
+        .collapsible-section textarea {
+            margin-bottom: 10px;
+        }
+
+        /* Ensure logs container has proper height when expanded */
+        .collapsible-section .logs-container {
+            margin-bottom: 10px;
+        }
+
+        /* Dark Mode Support */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            }
+
+            header {
+                background: #1e293b;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            }
+
+            h1 {
+                color: #818cf8;
+            }
+
+            .back-link {
+                color: #818cf8;
+                border-color: #818cf8;
+            }
+
+            .back-link:hover {
+                background: #818cf8;
+                color: #0f172a;
+            }
+
+            .stat-card {
+                background: #1e293b;
+                box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+            }
+
+            .stat-number {
+                color: #818cf8;
+            }
+
+            .stat-label {
+                color: #94a3b8;
+            }
+
+            .controls {
+                background: #1e293b;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            }
+
+            .table-btn {
+                background: #1e293b;
+                border-color: #334155;
+                color: #e2e8f0;
+            }
+
+            .table-btn:hover {
+                background: #818cf8;
+                color: #0f172a;
+                border-color: #818cf8;
+            }
+
+            .table-btn.active {
+                background: #818cf8;
+                color: #0f172a;
+                border-color: #818cf8;
+            }
+
+            .offline-banner {
+                background: #7f1d1d;
+                color: #fecaca;
+                border-color: #991b1b;
+            }
+
+            .offline-banner .retry-btn {
+                background: #dc2626;
+                color: white;
+            }
+
+            .offline-banner .retry-btn:hover {
+                background: #b91c1c;
+            }
+
+            textarea {
+                background: #0f172a;
+                color: #e2e8f0;
+                border-color: #334155;
+            }
+
+            textarea:focus {
+                border-color: #818cf8;
+            }
+
+            .data-container {
+                background: #1e293b;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            }
+
+            .table-info {
+                background: #0f172a;
+                color: #e2e8f0;
+            }
+
+            th {
+                background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+                color: white;
+            }
+
+            td {
+                color: #e2e8f0;
+                border-bottom-color: #334155;
+            }
+
+            tr:hover {
+                background: #0f172a;
+            }
+
+            .page-btn {
+                background: #1e293b;
+                border-color: #334155;
+                color: #e2e8f0;
+            }
+
+            .page-btn:hover:not(:disabled) {
+                background: #818cf8;
+                color: #0f172a;
+                border-color: #818cf8;
+            }
+
+            .loading {
+                color: #94a3b8;
+            }
+
+            .loading-spinner {
+                border-color: #334155;
+                border-top-color: #818cf8;
+            }
+
+            .json-cell:hover {
+                background: #334155;
+            }
+
+            .modal {
+                background: rgba(0, 0, 0, 0.85);
+            }
+
+            .modal-content {
+                background: #1e293b;
+                color: #e2e8f0;
+            }
+
+            .modal-close {
+                color: #94a3b8;
+            }
+
+            .modal-close:hover {
+                color: #e2e8f0;
+            }
+
+            pre {
+                background: #0f172a;
+                color: #e2e8f0;
+            }
+
+            .logs-controls-sticky {
+                background: #1e293b;
+                border-bottom-color: #334155;
+            }
+
+            .logs-status {
+                color: #94a3b8;
+            }
+
+            .collapsible-section {
+                background: #1e293b;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            }
+
+            .collapsible-header:hover {
+                background: #0f172a;
+            }
+
+            .collapsible-title {
+                color: #e2e8f0;
+            }
+
+            .collapse-icon {
+                color: #818cf8;
+            }
+
+            .sidebar-toggle {
+                background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            }
+
+            .sidebar-resizer {
+                background: rgba(255, 255, 255, 0.1);
+            }
+
+            .sidebar-resizer:hover {
+                background: rgba(129, 140, 248, 0.4);
+            }
+
+            .tables-section {
+                background: #1e293b;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            }
+
+            .section-title {
+                color: #e2e8f0;
+            }
+
+            .collapsible-section #sourcesList > div {
+                background: #0f172a;
+                border-color: #334155;
+                color: #e2e8f0;
+            }
+
+            .collapsible-section #sourcesList > div:hover {
+                border-color: #818cf8;
+                box-shadow: 0 2px 8px rgba(129, 140, 248, 0.3);
+            }
+
+            @media (max-width: 1200px) {
+                .left-sidebar {
+                    background: #1e293b;
+                    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
+                }
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>📊 Database Viewer</h1>
-            <a href="index.html" class="back-link">← Back to Listings</a>
+            <div class="header-actions">
+                <button class="refresh-btn" id="refreshBtn" onclick="refreshDatabase()" title="Refresh database connection and reload all data">
+                    <span class="refresh-icon" id="refreshIcon">🔄</span>
+                    Refresh
+                </button>
+                <a href="index.html" class="back-link">← Back to Listings</a>
+            </div>
         </header>
 
+        <div class="offline-banner" id="offlineBanner">
+            <span>Backend is offline. Trying to reconnect...</span>
+            <button class="retry-btn" onclick="manualRetry()">Retry now</button>
+        </div>
+
+        <!-- Database Statistics -->
         <div class="stats-row" id="statsRow">
             <div class="loading">
                 <div class="loading-spinner"></div>
@@ -331,29 +1047,108 @@
             </div>
         </div>
 
-        <div class="controls">
-            <h2 style="margin-bottom: 20px; color: #333;">Tables</h2>
-            <div class="table-list" id="tableList">
-                <div class="loading">Loading tables...</div>
-            </div>
+        <!-- Main Content Layout -->
+        <div class="main-content">
+            <!-- Sidebar Toggle Button -->
+            <button class="sidebar-toggle collapsed" id="sidebarToggle" onclick="toggleSidebar()" title="Toggle Tools Panel">
+                <span id="sidebarToggleText">▶ Tools</span>
+            </button>
 
-            <div class="query-section" style="border-top: 2px solid #e0e0e0; padding-top: 20px; margin-top: 20px;">
-                <h3 style="margin-bottom: 15px; color: #333;">Source Management</h3>
-                <div id="sourcesList" style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
-                    <div class="loading">Loading sources...</div>
+            <!-- Left Sidebar: Collapsible Sections inside resizable wrapper -->
+            <div class="sidebar-wrapper collapsed" id="sidebarWrapper">
+                <div class="left-sidebar collapsed" id="leftSidebar">
+                <!-- Source Management Section (Collapsible) -->
+                <div class="collapsible-section collapsed" id="sourcesSection">
+                    <div class="collapsible-header" onclick="toggleSection('sourcesSection')">
+                        <div class="collapsible-title">
+                            <span class="collapse-icon">▶</span>
+                            <span>⚙️ Source Management</span>
+                        </div>
+                    </div>
+                    <div class="collapsible-content">
+                        <div class="collapsible-content-inner">
+                            <div id="sourcesList" style="display: flex; flex-wrap: wrap; gap: 15px;">
+                                <div class="loading">Loading sources...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom SQL Query Section (Collapsible) -->
+                <div class="collapsible-section collapsed" id="querySection">
+                    <div class="collapsible-header" onclick="toggleSection('querySection')">
+                        <div class="collapsible-title">
+                            <span class="collapse-icon">▶</span>
+                            <span>🔍 Custom SQL Query</span>
+                        </div>
+                    </div>
+                    <div class="collapsible-content">
+                        <div class="collapsible-content-inner">
+                            <textarea id="sqlQuery" placeholder="Enter SQL query (SELECT only)...">SELECT * FROM listings LIMIT 10</textarea>
+                            <button class="btn-primary" onclick="executeQuery()" style="margin-top: 10px;">Execute Query</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Backend Logs Section (Collapsible) -->
+                <div class="collapsible-section" id="logsSection">
+                    <div class="collapsible-header" onclick="toggleSection('logsSection')">
+                        <div class="collapsible-title">
+                            <span class="collapse-icon">▼</span>
+                            <span>📋 Backend Logs</span>
+                        </div>
+                    </div>
+                    <div class="collapsible-content">
+                        <div class="collapsible-content-inner">
+                            <div class="logs-controls-sticky">
+                                <div class="logs-controls">
+                                    <button class="btn-primary btn-small" id="pauseLogsBtn" onclick="event.stopPropagation(); toggleLogsPause()">
+                                        <span id="pauseIcon">⏸️</span> <span id="pauseText">Pause</span>
+                                    </button>
+                                    <button class="btn-success btn-small" onclick="event.stopPropagation(); restartBackend()">
+                                        🔄 Restart
+                                    </button>
+                                    <button class="btn-primary btn-small" onclick="event.stopPropagation(); refreshLogs()">
+                                        🔄 Refresh
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="logs-container" id="logsContainer">
+                                <div class="loading">
+                                    <div class="loading-spinner"></div>
+                                    <p style="color: #d4d4d4;">Loading logs...</p>
+                                </div>
+                            </div>
+                            <div class="logs-status">
+                                <div>
+                                    <span id="autoScrollIndicator" class="auto-scroll-indicator"></span>
+                                    <span id="logsStatusText">Auto-updating...</span>
+                                </div>
+                                <div id="logsCount">0 lines</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            <div class="query-section">
-                <h3 style="margin-bottom: 15px; color: #333;">Custom SQL Query</h3>
-                <textarea id="sqlQuery" placeholder="Enter SQL query (SELECT only)...">SELECT * FROM listings LIMIT 10</textarea>
-                <button class="btn-primary" onclick="executeQuery()">Execute Query</button>
+                <div class="sidebar-resizer" id="sidebarResizer"></div>
             </div>
-        </div>
 
-        <div class="data-container" id="dataContainer">
-            <div class="loading">
-                <p>Select a table or execute a query to view data</p>
+            <!-- Right Side: Tables and Data View -->
+            <div class="main-content-wrapper" style="display: flex; flex-direction: column; gap: 20px;">
+                <!-- Tables Section -->
+                <div class="tables-section">
+                    <div class="section-title">📊 Tables</div>
+                    <div class="table-list" id="tableList">
+                        <div class="loading">Loading tables...</div>
+                    </div>
+                </div>
+
+                <!-- Data View Section -->
+                <div class="data-container" id="dataContainer">
+                    <div class="loading">
+                        <p>Select a table or execute a query to view data</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -370,18 +1165,128 @@
         const API_BASE = 'http://localhost:8000';
         let currentTable = null;
         let currentPage = 1;
+        let isRefreshing = false;
+        let backendOnline = true;
+        let retryTimer = null;
+        const SIDEBAR_MIN = 260;
+        const SIDEBAR_MAX = 720;
+        const SIDEBAR_DEFAULT = 300;
 
-        // Initialize
+        // Logs management
+        let logsAutoUpdate = true;
+        let logsPaused = false;
+        let logsUpdateInterval = null;
+        let lastLogTimestamp = null;
+
+        // Initialize - automatically refresh on page load
         async function init() {
-            await loadStats();
-            await loadTables();
-            await loadSources();
+            console.log('🔄 Initializing database viewer...');
+            await refreshDatabase();
+            await loadLogs();
+            startLogsAutoUpdate();
+            initSidebarResizer();
+        }
+
+        // Backend connectivity helpers
+        function setBackendStatus(isUp) {
+            backendOnline = isUp;
+            const banner = document.getElementById('offlineBanner');
+            if (banner) {
+                banner.style.display = isUp ? 'none' : 'flex';
+            }
+            if (isUp && retryTimer) {
+                clearTimeout(retryTimer);
+                retryTimer = null;
+            } else if (!isUp && !retryTimer) {
+                retryTimer = setTimeout(() => {
+                    refreshDatabase(true);
+                }, 5000);
+            }
+        }
+
+        function manualRetry() {
+            if (retryTimer) {
+                clearTimeout(retryTimer);
+                retryTimer = null;
+            }
+            refreshDatabase(true);
+        }
+
+        // Refresh all database data
+        async function refreshDatabase(force = false) {
+            if (isRefreshing && !force) {
+                console.log('⏳ Refresh already in progress...');
+                return;
+            }
+
+            isRefreshing = true;
+            const refreshBtn = document.getElementById('refreshBtn');
+            
+            if (refreshBtn) {
+                refreshBtn.classList.add('refreshing');
+                refreshBtn.disabled = true;
+            }
+
+            try {
+                console.log('🔄 Refreshing backend connection and database...');
+                
+                // Clear current data
+                document.getElementById('statsRow').innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Refreshing database...</p></div>';
+                document.getElementById('tableList').innerHTML = '<div class="loading">Refreshing tables...</div>';
+                document.getElementById('sourcesList').innerHTML = '<div class="loading">Refreshing sources...</div>';
+
+                // Reload all data in parallel
+                await Promise.all([
+                    loadStats(),
+                    loadTables(),
+                    loadSources()
+                ]);
+
+                // If a table was previously selected, reload it
+                if (currentTable) {
+                    await loadTable(currentTable, currentPage);
+                } else {
+                    document.getElementById('dataContainer').innerHTML = '<div class="loading"><p>Select a table or execute a query to view data</p></div>';
+                }
+
+                // Restart logs
+                stopLogsAutoUpdate();
+                await loadLogs();
+                startLogsAutoUpdate();
+
+                setBackendStatus(true);
+                console.log('✅ Backend and database refresh complete');
+            } catch (error) {
+                console.error('❌ Error refreshing backend/database:', error);
+                setBackendStatus(false);
+
+                const errorMsg = error.message || 'Failed to connect to backend. Make sure the backend server is running.';
+                document.getElementById('statsRow').innerHTML = `<div style="background: #fee; padding: 20px; border-radius: 8px; color: #c33;"><strong>Connection Error:</strong> ${errorMsg}</div>`;
+                document.getElementById('tableList').innerHTML = `<p style="color: red;">⚠️ ${errorMsg}</p>`;
+                document.getElementById('sourcesList').innerHTML = `<p style="color: red;">⚠️ ${errorMsg}</p>`;
+            } finally {
+                isRefreshing = false;
+                if (refreshBtn) {
+                    refreshBtn.classList.remove('refreshing');
+                    refreshBtn.disabled = false;
+                }
+            }
         }
 
         // Load sources with delete buttons
         async function loadSources() {
             try {
-                const response = await fetch(`${API_BASE}/api/sources`);
+                const response = await fetch(`${API_BASE}/api/sources`, {
+                    cache: 'no-cache',
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const sources = await response.json();
 
                 const container = document.getElementById('sourcesList');
@@ -404,6 +1309,9 @@
                 });
             } catch (error) {
                 console.error('Error loading sources:', error);
+                const container = document.getElementById('sourcesList');
+                container.innerHTML = `<p style="color: red;">⚠️ Error loading sources: ${error.message || 'Unknown error'}</p>`;
+                throw error; // Re-throw to be caught by refreshDatabase
             }
         }
 
@@ -435,7 +1343,17 @@
         // Load database stats
         async function loadStats() {
             try {
-                const response = await fetch(`${API_BASE}/db/stats`);
+                const response = await fetch(`${API_BASE}/db/stats`, {
+                    cache: 'no-cache',
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const stats = await response.json();
 
                 const container = document.getElementById('statsRow');
@@ -467,13 +1385,26 @@
                 }
             } catch (error) {
                 console.error('Error loading stats:', error);
+                const container = document.getElementById('statsRow');
+                container.innerHTML = `<div style="background: #fee; padding: 20px; border-radius: 8px; color: #c33;"><strong>Error:</strong> ${error.message || 'Failed to load database stats'}</div>`;
+                throw error; // Re-throw to be caught by refreshDatabase
             }
         }
 
         // Load tables
         async function loadTables() {
             try {
-                const response = await fetch(`${API_BASE}/db/tables`);
+                const response = await fetch(`${API_BASE}/db/tables`, {
+                    cache: 'no-cache',
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
 
                 const container = document.getElementById('tableList');
@@ -488,7 +1419,8 @@
                 });
             } catch (error) {
                 console.error('Error loading tables:', error);
-                document.getElementById('tableList').innerHTML = '<p style="color: red;">Error loading tables</p>';
+                document.getElementById('tableList').innerHTML = `<p style="color: red;">⚠️ Error loading tables: ${error.message || 'Unknown error'}</p>`;
+                throw error; // Re-throw to be caught by refreshDatabase
             }
         }
 
@@ -544,6 +1476,10 @@
                 html += '<p>No data in this table</p>';
             } else {
                 html += '<table><thead><tr>';
+                // Actions column first for listings
+                if (data.table === 'listings') {
+                    html += `<th style="min-width:120px; max-width:150px;">Actions</th>`;
+                }
                 data.columns.forEach(col => {
                     html += `<th>${col}</th>`;
                 });
@@ -551,6 +1487,16 @@
 
                 data.data.forEach(row => {
                     html += '<tr>';
+
+                    // Actions cell first for listings
+                    if (data.table === 'listings') {
+                        const listingId = row['id'];
+                        html += `<td style="min-width:120px; max-width:150px;">
+                            <button class="btn-small btn-success" onclick="refreshSingleListing(${listingId})">Refresh</button>
+                            <button class="btn-small btn-danger" style="margin-left:6px;" onclick="deleteSingleListing(${listingId})">Delete</button>
+                        </td>`;
+                    }
+
                     data.columns.forEach(col => {
                         const value = row[col];
                         let displayValue = value;
@@ -571,6 +1517,7 @@
 
                         html += `<td>${displayValue}</td>`;
                     });
+
                     html += '</tr>';
                 });
 
@@ -684,8 +1631,334 @@
             }
         });
 
-        // Initialize on load
-        init();
+        // Load backend logs
+        async function loadLogs() {
+            try {
+                const url = lastLogTimestamp 
+                    ? `${API_BASE}/db/logs?lines=200&since=${encodeURIComponent(lastLogTimestamp)}`
+                    : `${API_BASE}/db/logs?lines=200`;
+                
+                const response = await fetch(url, {
+                    cache: 'no-cache',
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
+
+                if (!response.ok) {
+                    // If 404, the endpoint doesn't exist yet (backend needs restart)
+                    if (response.status === 404) {
+                        const container = document.getElementById('logsContainer');
+                        container.innerHTML = `<div style="color: #cca700; padding: 20px; text-align: center;">
+                            <p><strong>⚠️ Logs endpoint not available</strong></p>
+                            <p>Please restart the backend server to enable log viewing.</p>
+                            <p style="font-size: 0.85rem; margin-top: 10px; color: #999;">
+                                The backend needs to be restarted to load the new logging endpoints.
+                            </p>
+                        </div>`;
+                        // Stop auto-updating if endpoint doesn't exist
+                        stopLogsAutoUpdate();
+                        return;
+                    }
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                const container = document.getElementById('logsContainer');
+                const countEl = document.getElementById('logsCount');
+
+                if (!data.file_exists) {
+                    container.innerHTML = `<div style="color: #999; text-align: center; padding: 20px;">${data.message || 'No logs available yet. Logs will appear once the backend processes requests.'}</div>`;
+                    countEl.textContent = '0 lines';
+                    return;
+                }
+
+                // Update count
+                countEl.textContent = `${data.total_lines} lines`;
+
+                // If we have new logs, append them
+                if (data.logs && data.logs.length > 0) {
+                    let html = '';
+                    if (!logsPaused) {
+                        // Clear and show all logs if not paused
+                        const allLogsResponse = await fetch(`${API_BASE}/db/logs?lines=500`, {
+                            cache: 'no-cache',
+                            headers: { 'Cache-Control': 'no-cache' }
+                        });
+                        const allLogsData = await allLogsResponse.json();
+                        if (allLogsData.logs) {
+                            allLogsData.logs.forEach(line => {
+                                html += formatLogLine(line);
+                            });
+                        }
+                    } else {
+                        // If paused, just append new lines
+                        const currentHtml = container.innerHTML;
+                        data.logs.forEach(line => {
+                            html += formatLogLine(line);
+                        });
+                        html = currentHtml + html;
+                    }
+
+                    container.innerHTML = html;
+
+                    // Auto-scroll to bottom if not paused
+                    if (!logsPaused) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+
+                    // Update timestamp
+                    if (data.last_updated) {
+                        lastLogTimestamp = data.last_updated;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading logs:', error);
+                const container = document.getElementById('logsContainer');
+                // Only show error if it's not a 404 (404 is handled above)
+                if (!error.message || !error.message.includes('404')) {
+                    container.innerHTML = `<div style="color: #f48771; padding: 20px;">⚠️ Error loading logs: ${error.message || 'Unknown error'}</div>`;
+                }
+            }
+        }
+
+        // Format a log line with color coding
+        function formatLogLine(line) {
+            let className = '';
+            if (line.includes('ERROR') || line.includes('CRITICAL')) {
+                className = 'error';
+            } else if (line.includes('WARNING') || line.includes('WARN')) {
+                className = 'warning';
+            } else if (line.includes('INFO')) {
+                className = 'info';
+            } else if (line.includes('DEBUG')) {
+                className = 'debug';
+            }
+
+            return `<div class="log-line ${className}">${escapeHtml(line)}</div>`;
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Toggle logs pause
+        function toggleLogsPause() {
+            logsPaused = !logsPaused;
+            const pauseBtn = document.getElementById('pauseLogsBtn');
+            const pauseIcon = document.getElementById('pauseIcon');
+            const pauseText = document.getElementById('pauseText');
+            const indicator = document.getElementById('autoScrollIndicator');
+            const statusText = document.getElementById('logsStatusText');
+
+            if (logsPaused) {
+                pauseIcon.textContent = '▶️';
+                pauseText.textContent = 'Resume';
+                indicator.classList.add('paused');
+                statusText.textContent = 'Paused';
+            } else {
+                pauseIcon.textContent = '⏸️';
+                pauseText.textContent = 'Pause';
+                indicator.classList.remove('paused');
+                statusText.textContent = 'Auto-updating...';
+                // Scroll to bottom when resuming
+                const container = document.getElementById('logsContainer');
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        // Refresh logs manually
+        async function refreshLogs() {
+            lastLogTimestamp = null; // Reset to get all logs
+            await loadLogs();
+        }
+
+        // Start auto-updating logs
+        function startLogsAutoUpdate() {
+            if (logsUpdateInterval) {
+                clearInterval(logsUpdateInterval);
+            }
+            logsUpdateInterval = setInterval(() => {
+                if (logsAutoUpdate && !logsPaused) {
+                    loadLogs();
+                }
+            }, 2000); // Update every 2 seconds
+        }
+
+        // Stop auto-updating logs
+        function stopLogsAutoUpdate() {
+            if (logsUpdateInterval) {
+                clearInterval(logsUpdateInterval);
+                logsUpdateInterval = null;
+            }
+        }
+
+        // Restart backend
+        async function restartBackend() {
+            if (!confirm('Are you sure you want to restart the backend server?\n\nThis will temporarily interrupt service.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/db/restart`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert(`✅ ${data.message}\n\n${data.note || ''}`);
+                    // Wait a moment, then refresh logs to see restart
+                    setTimeout(() => {
+                        lastLogTimestamp = null;
+                        loadLogs();
+                    }, 1000);
+                } else {
+                    alert(`❌ Error: ${data.detail || 'Failed to restart backend'}`);
+                }
+            } catch (error) {
+                console.error('Error restarting backend:', error);
+                alert(`❌ Error restarting backend: ${error.message || 'Unknown error'}`);
+            }
+        }
+
+        // Toggle main sidebar
+        function toggleSidebar() {
+            const sidebar = document.getElementById('leftSidebar');
+            const wrapper = document.getElementById('sidebarWrapper');
+            const toggle = document.getElementById('sidebarToggle');
+            const toggleText = document.getElementById('sidebarToggleText');
+            
+            if (!sidebar || !toggle || !wrapper) return;
+            
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            sidebar.classList.toggle('collapsed');
+            wrapper.classList.toggle('collapsed');
+            
+            // Update toggle button position and text
+            if (isCollapsed) {
+                // Expanding sidebar
+                toggle.classList.add('expanded');
+                toggle.classList.remove('collapsed');
+                toggleText.textContent = '◀ Tools';
+                wrapper.style.width = `${SIDEBAR_DEFAULT}px`;
+                sidebar.style.opacity = 1;
+            } else {
+                // Collapsing sidebar
+                toggle.classList.remove('expanded');
+                toggle.classList.add('collapsed');
+                toggleText.textContent = '▶ Tools';
+                wrapper.style.width = '0px';
+            }
+        }
+
+        // Toggle collapsible sections
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            if (!section) return;
+            
+            const icon = section.querySelector('.collapse-icon');
+            if (!icon) return;
+            
+            section.classList.toggle('collapsed');
+            
+            // Update icon with smooth transition
+            if (section.classList.contains('collapsed')) {
+                icon.textContent = '▶';
+            } else {
+                icon.textContent = '▼';
+            }
+        }
+
+        // Initialize on load - automatically refresh database and start logs
+        // This ensures we always get the latest data when the page loads
+        window.addEventListener('load', () => {
+            console.log('📄 Page loaded, initializing database viewer...');
+            init();
+        });
+
+        function initSidebarResizer() {
+            const resizer = document.getElementById('sidebarResizer');
+            const wrapper = document.getElementById('sidebarWrapper');
+            const sidebar = document.getElementById('leftSidebar');
+            if (!resizer || !wrapper || !sidebar) return;
+
+            let isDragging = false;
+
+            resizer.addEventListener('mousedown', (e) => {
+                if (wrapper.classList.contains('collapsed')) return;
+                isDragging = true;
+                document.body.style.userSelect = 'none';
+                document.body.style.cursor = 'col-resize';
+                e.preventDefault();
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const rect = wrapper.getBoundingClientRect();
+                const newWidth = Math.min(Math.max(e.clientX - rect.left, SIDEBAR_MIN), SIDEBAR_MAX);
+                wrapper.style.width = `${newWidth}px`;
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    document.body.style.userSelect = '';
+                    document.body.style.cursor = '';
+                }
+            });
+
+            // Ensure default width when expanded first time
+            if (!wrapper.classList.contains('collapsed')) {
+                wrapper.style.width = `${SIDEBAR_DEFAULT}px`;
+            }
+        }
+
+        // Also refresh when page becomes visible again (e.g., switching tabs back)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && !isRefreshing) {
+                console.log('👁️ Page became visible, refreshing database...');
+                refreshDatabase();
+                if (!logsPaused) {
+                    loadLogs();
+                }
+            }
+        });
+
+        // --- Listing actions from table view ---
+        async function refreshSingleListing(listingId) {
+            try {
+                const res = await fetch(`${API_BASE}/api/listings/${listingId}`);
+                if (!res.ok) throw new Error('Failed to refresh listing');
+                // Reload current table to show latest data
+                if (currentTable === 'listings') {
+                    await loadTable('listings', currentPage);
+                }
+            } catch (e) {
+                alert(`Error refreshing listing: ${e.message || e}`);
+            }
+        }
+
+        async function deleteSingleListing(listingId) {
+            if (!confirm('Delete this listing?')) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/listings/${listingId}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Failed to delete listing');
+                // Reload current table to reflect deletion
+                if (currentTable === 'listings') {
+                    await loadTable('listings', currentPage);
+                }
+            } catch (e) {
+                alert(`Error deleting listing: ${e.message || e}`);
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            stopLogsAutoUpdate();
+        });
     </script>
 </body>
 </html>

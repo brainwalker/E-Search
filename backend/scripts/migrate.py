@@ -5,7 +5,7 @@ Transitions from location string to locations table
 import os
 import shutil
 from datetime import datetime
-from api.database import engine, Base, SessionLocal, Location, Source
+from api.database import engine, Base, SessionLocal, Location, Source, Tier
 
 
 def backup_database():
@@ -36,12 +36,14 @@ def seed_locations():
     try:
         print("\n📍 Seeding locations...")
 
-        # Create or get SexyFriendsToronto source first
-        source = db.query(Source).filter(Source.name == "SexyFriendsToronto").first()
+        # Create or get SFT source first
+        source = db.query(Source).filter(Source.name == "SFT").first()
         if not source:
             source = Source(
-                name="SexyFriendsToronto",
-                url="https://www.sexyfriendstoronto.com",
+                name="SFT",
+                url="https://www.sexyfriendstoronto.com/toronto-escorts/schedule",
+                base_url="https://www.sexyfriendstoronto.com/toronto-escorts/",
+                image_base_url="https://www.sexyfriendstoronto.com/toronto-escorts/thumbnails/",
                 active=True
             )
             db.add(source)
@@ -49,7 +51,7 @@ def seed_locations():
             db.refresh(source)
             print(f"✅ Created source: {source.name}")
 
-        # Define locations for SexyFriendsToronto
+        # Define locations for SFT
         locations_data = [
             {"town": "Vaughan", "location": "unknown", "is_default": False},
             {"town": "Midtown", "location": "Yonge & Eglinton", "is_default": False},
@@ -93,6 +95,104 @@ def seed_locations():
         db.close()
 
 
+def seed_tiers():
+    """Seed the tiers table with predefined tier pricing"""
+    db = SessionLocal()
+
+    try:
+        print("\n⭐ Seeding tiers...")
+
+        # Get SFT source
+        source = db.query(Source).filter(Source.name == "SFT").first()
+        if not source:
+            print("⚠️  SFT source not found. Creating it first...")
+            source = Source(
+                name="SFT",
+                url="https://www.sexyfriendstoronto.com/toronto-escorts/schedule",
+                base_url="https://www.sexyfriendstoronto.com/toronto-escorts/",
+                image_base_url="https://www.sexyfriendstoronto.com/toronto-escorts/thumbnails/",
+                active=True
+            )
+            db.add(source)
+            db.commit()
+            db.refresh(source)
+            print(f"✅ Created source: {source.name}")
+
+        # Check if tiers already exist
+        existing_count = db.query(Tier).filter(Tier.source_id == source.id).count()
+        if existing_count > 0:
+            print(f"⚠️  Tiers already exist for SFT ({existing_count} tiers found)")
+            print("Skipping tier seed.")
+            return
+
+        # Define tiers for SFT
+        tiers_data = [
+            {
+                "star": 1,
+                "tier": "Elite",
+                "incall_30min": "$160",
+                "incall_45min": "$200",
+                "incall_1hr": "$250",
+                "outcall_per_hr": "$270"
+            },
+            {
+                "star": 2,
+                "tier": "VIP",
+                "incall_30min": "$190",
+                "incall_45min": "$230",
+                "incall_1hr": "$290",
+                "outcall_per_hr": "$300"
+            },
+            {
+                "star": 3,
+                "tier": "Ultra VIP",
+                "incall_30min": "$230",
+                "incall_45min": "$270",
+                "incall_1hr": "$330",
+                "outcall_per_hr": "$340"
+            },
+            {
+                "star": 4,
+                "tier": "Platinum VIP",
+                "incall_30min": "$300",
+                "incall_45min": "$350",
+                "incall_1hr": "$400",
+                "outcall_per_hr": "Unknown"
+            }
+        ]
+
+        # Insert tiers
+        for tier_data in tiers_data:
+            tier = Tier(
+                source_id=source.id,
+                star=tier_data["star"],
+                tier=tier_data["tier"],
+                incall_30min=tier_data["incall_30min"],
+                incall_45min=tier_data["incall_45min"],
+                incall_1hr=tier_data["incall_1hr"],
+                outcall_per_hr=tier_data["outcall_per_hr"]
+            )
+            db.add(tier)
+
+        db.commit()
+        print(f"✅ Seeded {len(tiers_data)} tiers for {source.name}")
+
+        # Display the created tiers
+        print("\n📋 Created tiers:")
+        tiers = db.query(Tier).filter(Tier.source_id == source.id).order_by(Tier.star).all()
+        for t in tiers:
+            print(f"   Star {t.star}: {t.tier}")
+            print(f"      Incall 30min: {t.incall_30min}, 45min: {t.incall_45min}, 1hr: {t.incall_1hr}")
+            print(f"      Outcall per hr: {t.outcall_per_hr}")
+
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error seeding tiers: {e}")
+        raise
+    finally:
+        db.close()
+
+
 def main():
     """Main migration function"""
     print("=" * 60)
@@ -118,13 +218,19 @@ def main():
     print("=" * 60)
     seed_locations()
 
+    # Step 4: Seed tiers
+    print("\n" + "=" * 60)
+    print("STEP 4: Seeding tiers")
+    print("=" * 60)
+    seed_tiers()
+
     print("\n" + "=" * 60)
     print("✅ MIGRATION COMPLETED SUCCESSFULLY!")
     print("=" * 60)
     print("\nNext steps:")
     print("1. Start the backend server: cd backend && python3 -m api.main")
     print("2. Run the scraper to populate data with new location references")
-    print("\nThe 'Delete all data' button will preserve sources and locations.")
+    print("\nThe 'Delete all data' button will preserve sources, locations, and tiers.")
 
 
 if __name__ == "__main__":

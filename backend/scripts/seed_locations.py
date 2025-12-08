@@ -1,5 +1,5 @@
 """
-Seed locations data for SexyFriendsToronto
+Seed locations data for SFT
 This script populates the locations table with predefined locations
 """
 from api.database import SessionLocal, Location, Source
@@ -9,21 +9,21 @@ def seed_locations():
     db = SessionLocal()
 
     try:
-        # Get SexyFriendsToronto source
-        source = db.query(Source).filter(Source.name == "SexyFriendsToronto").first()
+        # Get SFT source
+        source = db.query(Source).filter(Source.name == "SFT").first()
 
         if not source:
-            print("Error: SexyFriendsToronto source not found. Please run scraper first to create the source.")
+            print("Error: SFT source not found. Please run scraper first to create the source.")
             return
 
         # Check if locations already exist
         existing_count = db.query(Location).filter(Location.source_id == source.id).count()
         if existing_count > 0:
-            print(f"Locations already exist for SexyFriendsToronto ({existing_count} locations found)")
+            print(f"Locations already exist for SFT ({existing_count} locations found)")
             print("Skipping seed. Delete existing locations first if you want to re-seed.")
             return
 
-        # Define locations for SexyFriendsToronto
+        # Define locations for SFT
         locations_data = [
             {"town": "Vaughan", "location": "unknown", "is_default": False},
             {"town": "Midtown", "location": "Yonge & Eglinton", "is_default": False},
@@ -50,7 +50,7 @@ def seed_locations():
             db.add(location)
 
         db.commit()
-        print(f"✅ Successfully seeded {len(locations_data)} locations for SexyFriendsToronto")
+        print(f"✅ Successfully seeded {len(locations_data)} locations for SFT")
 
         # Display the created locations
         print("\nCreated locations:")
