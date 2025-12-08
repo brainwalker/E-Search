@@ -22,9 +22,27 @@ class SexyFriendsTorontoScraper:
         self.image_base_url = self.source.image_base_url or "https://www.sexyfriendstoronto.com/toronto-escorts/thumbnails/"
 
     def get_or_create_source(self) -> Source:
+        # First, try to find source with new name
         source = self.db.query(Source).filter_by(name=self.source_name).first()
+        
         if not source:
-            # Create with proper URLs
+            # Migration: Check for old name "SexyFriendsToronto" and update it
+            old_source = self.db.query(Source).filter_by(name="SexyFriendsToronto").first()
+            if old_source:
+                # Migrate old source to new name
+                old_source.name = self.source_name
+                # Update URLs if they're missing
+                if not old_source.url:
+                    old_source.url = "https://www.sexyfriendstoronto.com/toronto-escorts/schedule"
+                if not old_source.base_url:
+                    old_source.base_url = "https://www.sexyfriendstoronto.com/toronto-escorts/"
+                if not old_source.image_base_url:
+                    old_source.image_base_url = "https://www.sexyfriendstoronto.com/toronto-escorts/thumbnails/"
+                self.db.commit()
+                return old_source
+        
+        if not source:
+            # Create new source with proper URLs
             source = Source(
                 name=self.source_name,
                 url="https://www.sexyfriendstoronto.com/toronto-escorts/schedule",
@@ -34,6 +52,7 @@ class SexyFriendsTorontoScraper:
             )
             self.db.add(source)
             self.db.commit()
+        
         return source
 
     def match_location(self, location_string: str, source_id: int) -> int:

@@ -14,21 +14,14 @@ from datetime import datetime
 
 router = APIRouter(prefix="/db", tags=["Database Viewer"])
 
-# Setup logging directory
+# Setup logging directory (for reading log files, not configuring logging)
+# Logging configuration is handled in main.py to avoid duplicate handlers
 LOG_DIR = Path(__file__).parent.parent.parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 LOG_FILE = LOG_DIR / "backend.log"
 
-# Configure file logging
-file_handler = logging.FileHandler(LOG_FILE, encoding='utf-8')
-file_handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-file_handler.setFormatter(formatter)
-
-# Get root logger and add handler
-root_logger = logging.getLogger()
-root_logger.addHandler(file_handler)
-root_logger.setLevel(logging.INFO)
+# Get logger for this module (logging is configured in main.py)
+logger = logging.getLogger(__name__)
 
 
 @router.get("/tables")
