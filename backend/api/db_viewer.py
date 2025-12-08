@@ -205,6 +205,9 @@ async def get_logs(
         if since:
             try:
                 since_dt = datetime.fromisoformat(since.replace('Z', '+00:00'))
+                # Make since_dt timezone-naive for comparison with log timestamps
+                if since_dt.tzinfo is not None:
+                    since_dt = since_dt.replace(tzinfo=None)
                 filtered_lines = []
                 for line in all_lines:
                     # Try to parse timestamp from log line (format: YYYY-MM-DD HH:MM:SS)
