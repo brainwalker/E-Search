@@ -187,30 +187,33 @@ async def get_sources(db: Session = Depends(get_db)):
 @app.post("/api/scrape/{source_name}")
 async def scrape_source(
     source_name: str,
-    use_new_scraper: bool = Query(False, description="Use new Crawlee-based scraper"),
+    use_new_scraper: bool = Query(True, description="Use new Crawlee-based scraper"),
     db: Session = Depends(get_db)
 ):
     """Trigger scraping for a specific source"""
-    # Map source names to keys
+    # Map source names to scraper registry keys
     source_map = {
         "sexyfriendstoronto": "sft",
         "sft": "sft",
+        "dd": "discreet",
+        "discreet": "discreet",
+        "discreetdolls": "discreet",
     }
 
     source_key = source_map.get(source_name.lower())
 
-    if use_new_scraper and source_key and source_key in SCRAPER_REGISTRY:
-        # Use new Crawlee-based scraper
+    # Use new Crawlee-based scraper for all implemented sources
+    if source_key and source_key in SCRAPER_REGISTRY:
         manager = ScraperManager(db)
         result = await manager.scrape_site(source_key)
         return result.to_dict()
-    elif source_name.lower() in ["sexyfriendstoronto", "sft"]:
-        # Use old scraper (default for now)
+    elif not use_new_scraper and source_name.lower() in ["sexyfriendstoronto", "sft"]:
+        # Legacy fallback for SFT only
         scraper = SexyFriendsTorontoScraper(db)
         result = await scraper.scrape_and_save()
         return result
     else:
-        raise HTTPException(status_code=404, detail=f"Scraper for {source_name} not found")
+        raise HTTPException(status_code=404, detail=f"Scraper for {source_name} not found. Available: {list(SCRAPER_REGISTRY.keys())}")
 
 
 @app.get("/api/scrapers")
