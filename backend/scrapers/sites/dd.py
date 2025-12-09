@@ -18,7 +18,7 @@ from bs4 import BeautifulSoup
 
 from ..base import BaseScraper, ScheduleItem, ScrapedListing
 from ..config import get_site_config
-from ..crawlers.static import StaticCrawler
+from ..crawlers.playwright_crawler import PlaywrightCrawler
 from ..utils.normalizers import (
     normalize_name,
     normalize_weight,
@@ -168,7 +168,7 @@ class DDScraper(BaseScraper):
     def __init__(self, db_session=None):
         config = get_site_config('discreet')
         super().__init__(config, db_session)
-        self.crawler = StaticCrawler(rate_limit=config.rate_limit_seconds)
+        self.crawler = PlaywrightCrawler(rate_limit=config.rate_limit_seconds)
 
     async def scrape_schedule(self) -> List[ScheduleItem]:
         """
