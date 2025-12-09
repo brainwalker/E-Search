@@ -234,6 +234,13 @@ def extract_bust(text: str) -> Tuple[Optional[str], Optional[str], Optional[str]
     """
     Extract bust size, type, and measurements from text.
 
+    Handles formats:
+        Bust: 34DD (Natural)
+        Bust: 32D-23-35 (Enhanced)
+        Bust: 34C-2636 Natural  (compact, missing dash)
+        Bust: 36D 30-36 Natural (space between bust and measurements)
+        Bust: 34DD-27-37 NaturalHeight: (no space before next field)
+
     Returns:
         Tuple of (bust_size, bust_type, measurements)
     """
@@ -241,38 +248,63 @@ def extract_bust(text: str) -> Tuple[Optional[str], Optional[str], Optional[str]
     bust_type = None
     measurements = None
 
-    # Full measurement pattern: Bust: 32D-23-35 (Enhanced)
+    # Extract bust type first (Natural/Enhanced) - can appear anywhere after bust value
+    bust_type_match = re.search(r'Bust:[^N]*?(Natural|Enhanced?|Ehanced)', text, re.IGNORECASE)
+    if bust_type_match:
+        bt = bust_type_match.group(1).strip().capitalize()
+        bust_type = 'Enhanced' if bt in ['Enhanced', 'Ehanced'] else bt
+
+    # Pattern 1: Full measurement with dashes: Bust: 32D-23-35
     match = re.search(
-        r'Bust:\s*(\d+[A-Z]+(?:\s*[-/]\s*\d+\s*[-/]\s*\d+)?)\s*\(?\s*(Natural|Enhanced?)?\s*\)?',
+        r'Bust:\s*(\d+[A-Z]+)\s*[-/]\s*(\d+)\s*[-/]\s*(\d+)',
         text, re.IGNORECASE
     )
-
     if match:
-        bust_val = match.group(1).strip().rstrip('-/')
-        bust_type_raw = match.group(2)
+        bust_size = match.group(1).upper()
+        measurements = f"{bust_size}-{match.group(2)}-{match.group(3)}"
+        return bust_size, bust_type, measurements
 
-        # Check if it's a full measurement
-        bust_clean = re.sub(r'\s*-\s*', '-', bust_val)
-        full_match = re.match(r'^(\d+[A-Z]+)-(\d+)-(\d+)$', bust_clean, re.IGNORECASE)
+    # Pattern 2: Compact format: Bust: 34C-2636 or 34C2636 (4 digit waist+hip)
+    match = re.search(
+        r'Bust:\s*(\d+[A-Z]+)[-\s]?(\d{4})\b',
+        text, re.IGNORECASE
+    )
+    if match:
+        bust_size = match.group(1).upper()
+        digits = match.group(2)
+        waist = digits[:2]
+        hip = digits[2:]
+        measurements = f"{bust_size}-{waist}-{hip}"
+        return bust_size, bust_type, measurements
 
-        if full_match:
-            bust_size = full_match.group(1).upper()
-            measurements = bust_clean
-        elif re.match(r'^\d+[A-Z]+$', bust_val, re.IGNORECASE):
-            bust_size = bust_val.upper()
+    # Pattern 3: Space between bust and measurements: Bust: 36D 30-36
+    match = re.search(
+        r'Bust:\s*(\d+[A-Z]+)\s+(\d+)\s*[-/]\s*(\d+)',
+        text, re.IGNORECASE
+    )
+    if match:
+        bust_size = match.group(1).upper()
+        measurements = f"{bust_size}-{match.group(2)}-{match.group(3)}"
+        return bust_size, bust_type, measurements
 
-        if bust_type_raw:
-            bt = bust_type_raw.strip().capitalize()
-            bust_type = 'Enhanced' if bt in ['Enhanced', 'Ehanced'] else bt
+    # Pattern 4: Just bust size: Bust: 34DD
+    match = re.search(
+        r'Bust:\s*(\d+[A-Z]+)(?:\s*\(|\s+Natural|\s+Enhanced|\s*$|\s+[A-Z])',
+        text, re.IGNORECASE
+    )
+    if match:
+        bust_size = match.group(1).upper()
 
-    # Check for measurements field
+    # Check for separate measurements field if we don't have measurements yet
     if not measurements:
         meas_match = re.search(
             r'Measurements?(?:\s*\([^)]+\))?[:\s]+(\d+[A-Z]*\s*[-/]\s*\d+\s*[-/]\s*\d+)',
             text, re.IGNORECASE
         )
         if meas_match:
-            measurements = meas_match.group(1).strip()
+            meas_val = meas_match.group(1).strip()
+            # Normalize to dashes
+            measurements = re.sub(r'\s*[-/]\s*', '-', meas_val)
             # Extract bust from measurements if not already set
             if not bust_size:
                 bust_from_meas = re.match(r'(\d+\s*[A-Z]+)', measurements, re.IGNORECASE)

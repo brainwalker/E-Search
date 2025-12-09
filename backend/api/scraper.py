@@ -502,50 +502,60 @@ class SexyFriendsTorontoScraper:
         # Extract bust measurements with type (if explicitly stated)
         # Handles:
         # "Bust: 32D-23- 35 ( Enhanced )" - full measurement with type
-        # "Bust: 34B-25-36 Natural" - full measurement with type  
+        # "Bust: 34B-25-36 Natural" - full measurement with type
         # "Bust: 34DD-27-37 NaturalHeight:" - no space before next field
         # "Bust: 34D-24-34 (Ehanced)" - typo in Enhanced
         # "Bust: 34DD" - just bust size
-        bust_match = re.search(r'Bust:\s*(\d+[A-Z]+(?:\s*[-/]\s*\d+\s*[-/]\s*\d+)?)\s*\(?\s*(Natural|Enhanced?|Ehanced)?\s*\)?', text, re.IGNORECASE)
+        # "Bust: 34C-2636 Natural" - compact format (missing dash)
+        # "Bust: 36D 30-36 Natural" - space between bust and measurements
+
+        # First extract bust type (Natural/Enhanced) from anywhere after Bust:
+        bust_type = None
+        bust_type_match = re.search(r'Bust:[^N]*?(Natural|Enhanced?|Ehanced)', text, re.IGNORECASE)
+        if bust_type_match:
+            bt = bust_type_match.group(1).strip().capitalize()
+            bust_type = 'Enhanced' if bt in ['Enhanced', 'Ehanced'] else bt
+
+        # Pattern 1: Full measurement with dashes: Bust: 32D-23-35
+        bust_match = re.search(r'Bust:\s*(\d+[A-Z]+)\s*[-/]\s*(\d+)\s*[-/]\s*(\d+)', text, re.IGNORECASE)
         if bust_match:
-            bust_val = bust_match.group(1).strip().rstrip('-/')
-            bust_type = bust_match.group(2)
-            
-            # Check if bust_val is actually a full measurement (e.g., "32D-23-35" or "32D-23- 35")
-            # Remove extra spaces first for matching
-            bust_clean = re.sub(r'\s*-\s*', '-', bust_val)
-            full_measurement_match = re.match(r'^(\d+[A-Z]+)-(\d+)-(\d+)$', bust_clean, re.IGNORECASE)
-            if full_measurement_match:
-                # It's a full measurement - extract just the bust and set measurements
-                bust_raw = full_measurement_match.group(1).upper()
+            bust_raw = bust_match.group(1).upper()
+            profile_data['bust'] = self.normalize_bust_size(bust_raw)
+            if 'measurements' not in profile_data:
+                profile_data['measurements'] = f"{bust_raw}-{bust_match.group(2)}-{bust_match.group(3)}"
+            if bust_type:
+                profile_data['bust_type'] = bust_type
+        else:
+            # Pattern 2: Compact format: Bust: 34C-2636 or 34C2636 (4 digit waist+hip)
+            compact_match = re.search(r'Bust:\s*(\d+[A-Z]+)[-\s]?(\d{4})\b', text, re.IGNORECASE)
+            if compact_match:
+                bust_raw = compact_match.group(1).upper()
+                digits = compact_match.group(2)
+                waist = digits[:2]
+                hip = digits[2:]
                 profile_data['bust'] = self.normalize_bust_size(bust_raw)
                 if 'measurements' not in profile_data:
-                    profile_data['measurements'] = self.normalize_measurements(bust_clean)
-                # Extract bust type (Natural or Enhanced) - fix typo "Ehanced"
+                    profile_data['measurements'] = f"{bust_raw}-{waist}-{hip}"
                 if bust_type:
-                    bt = bust_type.strip().capitalize()
-                    profile_data['bust_type'] = 'Enhanced' if bt in ['Enhanced', 'Ehanced'] else bt
-            elif re.match(r'^\d+[A-Z]+$', bust_val, re.IGNORECASE):
-                # It's a valid bust size (not "BUSTY" header)
-                profile_data['bust'] = self.normalize_bust_size(bust_val)
-                # Extract bust type (Natural or Enhanced) - fix typo "Ehanced"
-                if bust_type:
-                    bt = bust_type.strip().capitalize()
-                    profile_data['bust_type'] = 'Enhanced' if bt in ['Enhanced', 'Ehanced'] else bt
-        
-        # Ensure bust is normalized to "34 DD" format
-        if 'bust' in profile_data:
-            # Check if bust contains full measurement
-            bust_check = re.match(r'^(\d+\s*[A-Z]+)\s*[-/]\s*\d+\s*[-/]\s*\d+$', profile_data['bust'], re.IGNORECASE)
-            if bust_check:
-                # bust contains full measurement - extract just the bust
-                if 'measurements' not in profile_data:
-                    profile_data['measurements'] = self.normalize_measurements(profile_data['bust'])
-                bust_raw = bust_check.group(1).replace(' ', '').upper()
-                profile_data['bust'] = self.normalize_bust_size(bust_raw)
+                    profile_data['bust_type'] = bust_type
             else:
-                # Normalize bust format
-                profile_data['bust'] = self.normalize_bust_size(profile_data['bust'])
+                # Pattern 3: Space between bust and measurements: Bust: 36D 30-36
+                space_match = re.search(r'Bust:\s*(\d+[A-Z]+)\s+(\d+)\s*[-/]\s*(\d+)', text, re.IGNORECASE)
+                if space_match:
+                    bust_raw = space_match.group(1).upper()
+                    profile_data['bust'] = self.normalize_bust_size(bust_raw)
+                    if 'measurements' not in profile_data:
+                        profile_data['measurements'] = f"{bust_raw}-{space_match.group(2)}-{space_match.group(3)}"
+                    if bust_type:
+                        profile_data['bust_type'] = bust_type
+                else:
+                    # Pattern 4: Just bust size: Bust: 34DD
+                    just_bust_match = re.search(r'Bust:\s*(\d+[A-Z]+)(?:\s*\(|\s+Natural|\s+Enhanced|\s*$|\s+[A-Z])', text, re.IGNORECASE)
+                    if just_bust_match:
+                        bust_raw = just_bust_match.group(1).upper()
+                        profile_data['bust'] = self.normalize_bust_size(bust_raw)
+                        if bust_type:
+                            profile_data['bust_type'] = bust_type
         
         # Infer bust type from text if not explicitly stated
         if 'bust' in profile_data and 'bust_type' not in profile_data:
