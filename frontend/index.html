@@ -1343,15 +1343,50 @@
         }
 
         async function scrapeAllSources() {
-            showNotification('Scraping started...', 'info');
-            try {
-                const response = await fetch(`${API_BASE}/api/scrape-all`, { method: 'POST' });
-                const result = await response.json();
-                showNotification('Scraping completed!', 'success');
+            // Get selected sources
+            const selectedButtons = Array.from(document.querySelectorAll('#sourcesButtons .source-btn.active'));
+            const allButtons = Array.from(document.querySelectorAll('#sourcesButtons .source-btn'));
+
+            // If all sources are selected or none selected, scrape all
+            if (selectedButtons.length === 0 || selectedButtons.length === allButtons.length) {
+                showNotification('Scraping all sources...', 'info');
+                try {
+                    const response = await fetch(`${API_BASE}/api/scrape-all`, { method: 'POST' });
+                    const result = await response.json();
+                    showNotification('Scraping completed!', 'success');
+                    await loadStats();
+                    await loadListings();
+                } catch (error) {
+                    showNotification('Scraping failed.', 'error');
+                }
+            } else {
+                // Scrape only selected sources
+                const sourceNames = selectedButtons.map(btn => btn.textContent.trim());
+                showNotification(`Scraping ${sourceNames.join(', ')}...`, 'info');
+
+                let successCount = 0;
+                let failCount = 0;
+
+                for (const sourceName of sourceNames) {
+                    try {
+                        const response = await fetch(`${API_BASE}/api/scrape/${sourceName}`, { method: 'POST' });
+                        if (response.ok) {
+                            successCount++;
+                        } else {
+                            failCount++;
+                        }
+                    } catch (error) {
+                        failCount++;
+                    }
+                }
+
+                if (failCount === 0) {
+                    showNotification(`Scraping completed! (${successCount} sources)`, 'success');
+                } else {
+                    showNotification(`Scraping done: ${successCount} ok, ${failCount} failed`, 'warning');
+                }
                 await loadStats();
                 await loadListings();
-            } catch (error) {
-                showNotification('Scraping failed.', 'error');
             }
         }
 
