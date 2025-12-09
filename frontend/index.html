@@ -1178,6 +1178,7 @@
                     const btn = document.createElement('button');
                     btn.className = 'source-btn active';
                     btn.dataset.sourceId = source.id;
+                    btn.dataset.sourceName = source.name;
                     btn.textContent = source.name;
                     btn.addEventListener('click', () => {
                         btn.classList.toggle('active');
@@ -1342,16 +1343,67 @@
             loadListings();
         }
 
+        // Map source names to API endpoint names
+        function getSourceApiName(sourceName) {
+            const nameLower = sourceName.toLowerCase();
+            // Map common source names to API endpoint names
+            if (nameLower.includes('sexyfriendstoronto') || nameLower.includes('sft')) {
+                return 'sft';
+            }
+            if (nameLower.includes('discreet') || nameLower.includes('dd')) {
+                return 'dd';
+            }
+            // Default: use lowercase name with spaces replaced
+            return nameLower.replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+        }
+
         async function scrapeAllSources() {
-            showNotification('Scraping started...', 'info');
+            // Get selected sources
+            const selectedSourceButtons = Array.from(document.querySelectorAll('#sourcesButtons .source-btn.active'));
+            
+            if (selectedSourceButtons.length === 0) {
+                showNotification('Please select at least one source to scrape.', 'error');
+                return;
+            }
+
+            const sourceNames = selectedSourceButtons.map(btn => btn.dataset.sourceName);
+            showNotification(`Scraping ${sourceNames.length} source(s)...`, 'info');
+            
             try {
-                const response = await fetch(`${API_BASE}/api/scrape-all`, { method: 'POST' });
-                const result = await response.json();
-                showNotification('Scraping completed!', 'success');
+                const results = [];
+                const errors = [];
+                
+                // Scrape each selected source
+                for (const btn of selectedSourceButtons) {
+                    const sourceName = btn.dataset.sourceName;
+                    const apiName = getSourceApiName(sourceName);
+                    
+                    try {
+                        const response = await fetch(`${API_BASE}/api/scrape/${apiName}`, { method: 'POST' });
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}`);
+                        }
+                        const result = await response.json();
+                        results.push({ source: sourceName, success: true, result });
+                    } catch (error) {
+                        errors.push({ source: sourceName, error: error.message });
+                    }
+                }
+                
+                if (errors.length > 0) {
+                    const errorMsg = errors.length === selectedSourceButtons.length 
+                        ? 'All scrapes failed.' 
+                        : `${errors.length} of ${selectedSourceButtons.length} scrapes failed.`;
+                    showNotification(errorMsg, 'error');
+                } else {
+                    showNotification(`Successfully scraped ${results.length} source(s)!`, 'success');
+                }
+                
                 await loadStats();
                 await loadListings();
             } catch (error) {
                 showNotification('Scraping failed.', 'error');
+                console.error('Scraping error:', error);
             }
         }
 

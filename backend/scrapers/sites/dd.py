@@ -18,7 +18,7 @@ from bs4 import BeautifulSoup
 
 from ..base import BaseScraper, ScheduleItem, ScrapedListing
 from ..config import get_site_config
-from ..crawlers.static import StaticCrawler
+from ..crawlers.stealth import StealthCrawler
 from ..utils.normalizers import (
     normalize_name,
     normalize_weight,
@@ -168,7 +168,17 @@ class DDScraper(BaseScraper):
     def __init__(self, db_session=None):
         config = get_site_config('discreet')
         super().__init__(config, db_session)
-        self.crawler = StaticCrawler(rate_limit=config.rate_limit_seconds)
+        self.crawler = StealthCrawler(
+            rate_limit=config.rate_limit_seconds,
+            headless=True
+        )
+        self._crawler_initialized = False
+
+    async def _ensure_crawler(self):
+        """Ensure crawler is initialized."""
+        if not self._crawler_initialized:
+            await self.crawler._init_browser()
+            self._crawler_initialized = True
 
     async def scrape_schedule(self) -> List[ScheduleItem]:
         """
@@ -176,6 +186,7 @@ class DDScraper(BaseScraper):
 
         Returns list of ScheduleItem objects with basic info from data-doll-info.
         """
+        await self._ensure_crawler()
         self.logger.info(f"Fetching schedule from {self.config.schedule_url}")
         soup = await self.crawler.fetch_soup(self.config.schedule_url)
         return self._parse_schedule(soup)
@@ -312,11 +323,22 @@ class DDScraper(BaseScraper):
         Returns:
             Dictionary of profile data
         """
+        await self._ensure_crawler()
         full_url = f"{self.config.base_url}{profile_url}/"
         self.logger.debug(f"Fetching profile: {full_url}")
 
         soup = await self.crawler.fetch_soup(full_url)
         return self._parse_profile(soup)
+
+    async def run(self):
+        """Override run to ensure crawler cleanup."""
+        try:
+            return await super().run()
+        finally:
+            # Cleanup crawler resources
+            if self._crawler_initialized:
+                await self.crawler.close()
+                self._crawler_initialized = False
 
     def _parse_profile(self, soup: BeautifulSoup) -> Dict[str, Any]:
         """Parse profile page HTML."""
@@ -388,18 +410,30 @@ class DDScraper(BaseScraper):
             for img in rightside.find_all('img'):
                 src = img.get('src', '')
                 if src and 'wp-content/uploads' in src:
-                    # Extract filename from URL
-                    filename = src.split('/')[-1]
-                    images.append(filename)
+                    # Extract path relative to wp-content/uploads/ (includes date directory)
+                    uploads_index = src.find('wp-content/uploads/')
+                    if uploads_index != -1:
+                        # Get everything after 'wp-content/uploads/'
+                        relative_path = src[uploads_index + len('wp-content/uploads/'):]
+                        # Remove query parameters if any
+                        relative_path = relative_path.split('?')[0]
+                        if relative_path and relative_path not in images:
+                            images.append(relative_path)
 
         # Also check for gallery images
         gallery = soup.find_all('img', class_='skip-lazy')
         for img in gallery:
             src = img.get('src', '')
             if src and 'wp-content/uploads' in src:
-                filename = src.split('/')[-1]
-                if filename not in images:
-                    images.append(filename)
+                # Extract path relative to wp-content/uploads/ (includes date directory)
+                uploads_index = src.find('wp-content/uploads/')
+                if uploads_index != -1:
+                    # Get everything after 'wp-content/uploads/'
+                    relative_path = src[uploads_index + len('wp-content/uploads/'):]
+                    # Remove query parameters if any
+                    relative_path = relative_path.split('?')[0]
+                    if relative_path and relative_path not in images:
+                        images.append(relative_path)
 
         if images:
             profile['images'] = images
