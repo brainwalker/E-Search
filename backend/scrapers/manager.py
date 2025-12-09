@@ -15,6 +15,7 @@ from .config import SITES, get_site_config, get_enabled_sites
 
 # Import all implemented scrapers
 from .sites.sft import SFTScraper
+from .sites.dd import DDScraper
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 # Add new scrapers here as they are implemented
 SCRAPER_REGISTRY: Dict[str, Type[BaseScraper]] = {
     'sft': SFTScraper,
+    'discreet': DDScraper,
     # 'secret': SecretScraper,
     # 'select': SelectScraper,
     # ... add more as implemented
