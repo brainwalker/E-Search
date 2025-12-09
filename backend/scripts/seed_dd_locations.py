@@ -1,6 +1,12 @@
 """
 Seed DD (DiscreetDolls) locations and update source URLs
 """
+import sys
+import os
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from api.database import SessionLocal, Source, Location
 
 
