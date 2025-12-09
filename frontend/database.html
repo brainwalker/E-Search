@@ -3,8 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>E-Search - Database Viewer</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
     <style>
+        :root {
+            --bg-primary: #0f0f1a;
+            --bg-secondary: #1a1a2e;
+            --bg-tertiary: #252542;
+            --bg-card: #1e1e35;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-color: #334155;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+            --radius: 12px;
+            --radius-lg: 16px;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,10 +37,12 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             min-height: 100vh;
             padding: 20px;
+            line-height: 1.6;
         }
 
         .container {
@@ -23,164 +50,391 @@
             margin: 0 auto;
         }
 
+        /* Header */
         header {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            margin-bottom: 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        h1 {
-            color: #667eea;
-            font-size: 2rem;
-        }
-
-        .back-link {
-            color: #667eea;
-            text-decoration: none;
-            font-weight: 600;
-            padding: 10px 20px;
-            border: 2px solid #667eea;
-            border-radius: 8px;
-            transition: all 0.3s;
-        }
-
-        .back-link:hover {
-            background: #667eea;
-            color: white;
-        }
-
-        .stats-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-            text-align: center;
-        }
-
-        .stat-number {
-            font-size: 1.8rem;
-            font-weight: bold;
-            color: #667eea;
-        }
-
-        .stat-label {
-            color: #666;
-            font-size: 0.9rem;
-            margin-top: 5px;
-            text-transform: uppercase;
-        }
-
-        .controls {
-            background: white;
-            padding: 25px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            margin-bottom: 30px;
-        }
-
-        .table-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .table-btn {
-            padding: 15px;
-            background: #f8f9fa;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-weight: 600;
-            color: #333;
-        }
-
-        .table-btn:hover {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-
-        .table-btn.active {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-
-        .query-section {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 2px solid #e0e0e0;
-        }
-
-        textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.95rem;
-            resize: vertical;
-            min-height: 100px;
-        }
-
-        textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        button {
-            padding: 12px 30px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            margin-top: 10px;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .data-container {
-            background: white;
-            padding: 25px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            overflow: auto;
-        }
-
-        .table-info {
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
+            background: var(--bg-secondary);
+            padding: 24px 32px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            margin-bottom: 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
+            gap: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .back-link {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-weight: 600;
+            padding: 10px 20px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .back-link:hover {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+        }
+
+        .refresh-btn {
+            padding: 10px 20px;
+            background: var(--accent-gradient);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .refresh-btn.refreshing {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .refresh-icon {
+            display: inline-block;
+            font-size: 16px;
+            transition: transform 0.3s;
+        }
+
+        .refresh-btn.refreshing .refresh-icon {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Offline Banner */
+        .offline-banner {
+            display: none;
+            background: rgba(239, 68, 68, 0.1);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--radius);
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .offline-banner .retry-btn {
+            padding: 8px 14px;
+            border: none;
+            background: var(--danger);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .offline-banner .retry-btn:hover {
+            background: #dc2626;
+        }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            padding: 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+
+        .stat-card:hover {
+            border-color: var(--accent-primary);
+        }
+
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-top: 4px;
+        }
+
+        /* Main Content Layout */
+        .main-content {
+            display: flex;
+            gap: 20px;
+            position: relative;
+        }
+
+        /* Sidebar Toggle */
+        .sidebar-toggle {
+            position: fixed;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1001;
+            background: var(--accent-gradient);
+            color: white;
+            border: none;
+            border-radius: 0 8px 8px 0;
+            padding: 15px 8px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            box-shadow: var(--shadow);
+            transition: all 0.2s ease;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+        }
+
+        .sidebar-toggle:hover {
+            transform: translateY(-50%) translateX(3px);
+        }
+
+        /* Sidebar */
+        .sidebar-wrapper {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            width: 350px;
+            min-width: 260px;
+            max-width: 720px;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-wrapper.collapsed {
+            width: 0 !important;
+            min-width: 0 !important;
+            max-width: 0 !important;
+            overflow: hidden;
+        }
+
+        .left-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100%;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+            position: sticky;
+            top: 20px;
+            transition: opacity 0.3s ease;
+        }
+
+        .left-sidebar.collapsed {
+            opacity: 0;
+        }
+
+        .sidebar-resizer {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            right: -5px;
+            width: 10px;
+            cursor: col-resize;
+            background: transparent;
+            z-index: 1300;
+        }
+
+        .sidebar-resizer:hover {
+            background: rgba(99, 102, 241, 0.3);
+        }
+
+        .main-content-wrapper {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Collapsible Sections */
+        .collapsible-section {
+            background: var(--bg-secondary);
+            padding: 0;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .collapsible-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 16px 20px;
+            transition: background 0.2s ease;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .collapsible-header:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .collapsible-title {
+            display: flex;
+            align-items: center;
             gap: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .collapse-icon {
+            font-size: 0.8rem;
+            color: var(--accent-primary);
+            transition: transform 0.3s ease;
+        }
+
+        .collapsible-section.collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+
+        .collapsible-content {
+            max-height: 2000px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .collapsible-section.collapsed .collapsible-content {
+            max-height: 0;
+        }
+
+        .collapsible-content-inner {
+            padding: 0 20px 20px;
+        }
+
+        /* Tables Section */
+        .tables-section {
+            background: var(--bg-secondary);
+            padding: 20px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .table-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+        }
+
+        .table-btn {
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .table-btn:hover {
+            background: var(--bg-card);
+            border-color: var(--accent-primary);
+            color: var(--text-primary);
+        }
+
+        .table-btn.active {
+            background: var(--accent-gradient);
+            border-color: transparent;
+            color: white;
+        }
+
+        /* Data Container */
+        .data-container {
+            background: var(--bg-secondary);
+            padding: 24px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            overflow: auto;
+            min-height: 400px;
+        }
+
+        .table-info {
+            margin-bottom: 20px;
+            padding: 14px 18px;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 0.95rem;
+        }
+
+        .table-info strong {
+            color: var(--accent-primary);
+        }
+
+        /* Data Table */
+        .table-wrapper {
+            max-height: calc(100vh - 320px);
+            overflow: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
         }
 
         table {
@@ -190,85 +444,231 @@
         }
 
         th {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--accent-gradient);
             color: white;
-            padding: 12px;
+            padding: 14px 16px;
             text-align: left;
             font-weight: 600;
             position: sticky;
             top: 0;
             z-index: 10;
+            white-space: nowrap;
         }
 
         td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #e0e0e0;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        tr:hover {
-            background: #f8f9fa;
+        tr:hover td {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
         }
 
+        /* Pagination */
         .pagination {
             display: flex;
             gap: 10px;
             align-items: center;
             margin-top: 20px;
+            justify-content: center;
         }
 
         .page-btn {
-            padding: 8px 16px;
-            background: #f8f9fa;
-            border: 2px solid #e0e0e0;
-            border-radius: 6px;
+            padding: 10px 18px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
+            color: var(--text-secondary);
+            transition: all 0.2s ease;
         }
 
         .page-btn:hover:not(:disabled) {
-            background: #667eea;
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
             color: white;
-            border-color: #667eea;
         }
 
         .page-btn:disabled {
-            opacity: 0.5;
+            opacity: 0.4;
             cursor: not-allowed;
         }
 
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
+        /* Forms & Inputs */
+        textarea {
+            width: 100%;
+            padding: 14px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            resize: vertical;
+            min-height: 100px;
+            margin-bottom: 12px;
         }
 
-        .loading-spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+
+        /* Buttons */
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--accent-gradient);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-small {
+            padding: 8px 14px;
+            font-size: 0.85rem;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        /* Logs Section */
+        .logs-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .logs-container {
+            background: #0d0d14;
+            color: #d4d4d4;
+            padding: 16px;
+            border-radius: 10px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.85rem;
+            max-height: 400px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+
+        .log-line {
+            margin: 3px 0;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+
+        .log-line.error { color: #f87171; }
+        .log-line.warning { color: #fbbf24; }
+        .log-line.info { color: #34d399; }
+        .log-line.debug { color: #60a5fa; }
+
+        .logs-status {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .auto-scroll-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--success);
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            margin-right: 6px;
+            animation: pulse 2s infinite;
         }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .auto-scroll-indicator.paused {
+            background: var(--danger);
+            animation: none;
         }
 
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Source Cards */
+        .source-card {
+            background: var(--bg-tertiary);
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .source-card:hover {
+            border-color: var(--accent-primary);
+        }
+
+        .source-card h4 {
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .source-card p {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+        }
+
+        .source-card button {
+            width: 100%;
+        }
+
+        /* JSON Cell */
         .json-cell {
-            max-width: 300px;
+            max-width: 200px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
             cursor: pointer;
+            color: var(--accent-primary);
         }
 
         .json-cell:hover {
-            background: #fff3cd;
+            text-decoration: underline;
         }
 
+        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -276,7 +676,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.85);
             z-index: 1000;
             align-items: center;
             justify-content: center;
@@ -287,33 +687,75 @@
         }
 
         .modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
+            background: var(--bg-secondary);
+            padding: 24px;
+            border-radius: var(--radius-lg);
             max-width: 800px;
             max-height: 80vh;
             overflow: auto;
             position: relative;
+            border: 1px solid var(--border-color);
         }
 
         .modal-close {
             position: absolute;
-            top: 15px;
-            right: 15px;
+            top: 16px;
+            right: 16px;
             font-size: 1.5rem;
             cursor: pointer;
-            color: #999;
+            color: var(--text-muted);
+            transition: color 0.2s ease;
         }
 
         .modal-close:hover {
-            color: #333;
+            color: var(--text-primary);
         }
 
         pre {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
+            background: var(--bg-tertiary);
+            padding: 16px;
+            border-radius: 10px;
             overflow: auto;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            border: 4px solid var(--border-color);
+            border-top: 4px solid var(--accent-primary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .main-content {
+                flex-direction: column;
+            }
+
+            .sidebar-wrapper {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+
+            .left-sidebar {
+                position: relative;
+                max-height: none;
+            }
+
+            .sidebar-toggle {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -321,9 +763,21 @@
     <div class="container">
         <header>
             <h1>📊 Database Viewer</h1>
-            <a href="index.html" class="back-link">← Back to Listings</a>
+            <div class="header-actions">
+                <button class="refresh-btn" id="refreshBtn" onclick="refreshDatabase()" title="Refresh database">
+                    <span class="refresh-icon" id="refreshIcon">🔄</span>
+                    Refresh
+                </button>
+                <a href="index.html" class="back-link">← Back to Listings</a>
+            </div>
         </header>
 
+        <div class="offline-banner" id="offlineBanner">
+            <span>⚠️ Backend is offline. Trying to reconnect...</span>
+            <button class="retry-btn" onclick="manualRetry()">Retry now</button>
+        </div>
+
+        <!-- Database Statistics -->
         <div class="stats-row" id="statsRow">
             <div class="loading">
                 <div class="loading-spinner"></div>
@@ -331,38 +785,124 @@
             </div>
         </div>
 
-        <div class="controls">
-            <h2 style="margin-bottom: 20px; color: #333;">Tables</h2>
-            <div class="table-list" id="tableList">
-                <div class="loading">Loading tables...</div>
-            </div>
+        <!-- Main Content Layout -->
+        <div class="main-content">
+            <!-- Sidebar Toggle Button -->
+            <button class="sidebar-toggle collapsed" id="sidebarToggle" onclick="toggleSidebar()" title="Toggle Tools Panel">
+                <span id="sidebarToggleText">▶ Tools</span>
+            </button>
 
-            <div class="query-section" style="border-top: 2px solid #e0e0e0; padding-top: 20px; margin-top: 20px;">
-                <h3 style="margin-bottom: 15px; color: #333;">Source Management</h3>
-                <div id="sourcesList" style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
-                    <div class="loading">Loading sources...</div>
+            <!-- Left Sidebar -->
+            <div class="sidebar-wrapper collapsed" id="sidebarWrapper">
+                <div class="left-sidebar collapsed" id="leftSidebar">
+                    <!-- Source Management Section -->
+                    <div class="collapsible-section collapsed" id="sourcesSection">
+                        <div class="collapsible-header" onclick="toggleSection('sourcesSection')">
+                            <div class="collapsible-title">
+                                <span class="collapse-icon">▶</span>
+                                <span>⚙️ Source Management</span>
+                            </div>
+                        </div>
+                        <div class="collapsible-content">
+                            <div class="collapsible-content-inner">
+                                <div id="sourcesList" style="display: flex; flex-direction: column; gap: 12px;">
+                                    <div class="loading">Loading sources...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Custom SQL Query Section -->
+                    <div class="collapsible-section collapsed" id="querySection">
+                        <div class="collapsible-header" onclick="toggleSection('querySection')">
+                            <div class="collapsible-title">
+                                <span class="collapse-icon">▶</span>
+                                <span>🔍 Custom SQL Query</span>
+                            </div>
+                        </div>
+                        <div class="collapsible-content">
+                            <div class="collapsible-content-inner">
+                                <textarea id="sqlQuery" placeholder="Enter SQL query (SELECT only)...">SELECT * FROM listings LIMIT 10</textarea>
+                                <button class="btn-primary" onclick="executeQuery()">Execute Query</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Backend Logs Section -->
+                    <div class="collapsible-section" id="logsSection">
+                        <div class="collapsible-header" onclick="toggleSection('logsSection')">
+                            <div class="collapsible-title">
+                                <span class="collapse-icon">▼</span>
+                                <span>📋 Backend Logs</span>
+                            </div>
+                        </div>
+                        <div class="collapsible-content">
+                            <div class="collapsible-content-inner">
+                                <div class="logs-controls">
+                                    <button class="btn-primary btn-small" id="pauseLogsBtn" onclick="event.stopPropagation(); toggleLogsPause()">
+                                        <span id="pauseIcon">⏸️</span> <span id="pauseText">Pause</span>
+                                    </button>
+                                    <button class="btn-success btn-small" onclick="event.stopPropagation(); restartBackend()">
+                                        🔄 Restart
+                                    </button>
+                                    <button class="btn-primary btn-small" onclick="event.stopPropagation(); refreshLogs()">
+                                        🔄 Refresh
+                                    </button>
+                                </div>
+                                <div class="logs-container" id="logsContainer">
+                                    <div class="loading">
+                                        <div class="loading-spinner"></div>
+                                        <p>Loading logs...</p>
+                                    </div>
+                                </div>
+                                <div class="logs-status">
+                                    <div>
+                                        <span id="autoScrollIndicator" class="auto-scroll-indicator"></span>
+                                        <span id="logsStatusText">Auto-updating...</span>
+                                    </div>
+                                    <div id="logsCount">0 lines</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+                <div class="sidebar-resizer" id="sidebarResizer"></div>
             </div>
 
-            <div class="query-section">
-                <h3 style="margin-bottom: 15px; color: #333;">Custom SQL Query</h3>
-                <textarea id="sqlQuery" placeholder="Enter SQL query (SELECT only)...">SELECT * FROM listings LIMIT 10</textarea>
-                <button class="btn-primary" onclick="executeQuery()">Execute Query</button>
-            </div>
-        </div>
+            <!-- Main Content Area -->
+            <div class="main-content-wrapper">
+                <!-- Tables Section -->
+                <div class="tables-section">
+                    <div class="section-title">📊 Tables</div>
+                    <div class="table-list" id="tableList">
+                        <div class="loading">Loading tables...</div>
+                    </div>
+                </div>
 
-        <div class="data-container" id="dataContainer">
-            <div class="loading">
-                <p>Select a table or execute a query to view data</p>
+                <!-- Data View Section -->
+                <div class="data-container" id="dataContainer">
+                    <div class="loading">
+                        <p>Select a table or execute a query to view data</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- JSON Modal -->
     <div class="modal" id="jsonModal">
         <div class="modal-content">
             <span class="modal-close" onclick="closeModal()">&times;</span>
-            <h3 style="margin-bottom: 15px;">JSON Data</h3>
+            <h3 style="margin-bottom: 16px; color: var(--text-primary);">JSON Data</h3>
             <pre id="jsonContent"></pre>
+        </div>
+    </div>
+
+    <!-- Extraction Debug Modal -->
+    <div class="modal" id="extractionModal" style="z-index: 2000;">
+        <div class="modal-content" style="max-width: 900px; max-height: 85vh; overflow: auto;">
+            <span class="modal-close" onclick="closeExtractionModal()">&times;</span>
+            <div id="extractionContent"></div>
         </div>
     </div>
 
@@ -370,83 +910,169 @@
         const API_BASE = 'http://localhost:8000';
         let currentTable = null;
         let currentPage = 1;
+        let isRefreshing = false;
+        let backendOnline = true;
+        let retryTimer = null;
+        const SIDEBAR_MIN = 260;
+        const SIDEBAR_MAX = 720;
+        const SIDEBAR_DEFAULT = 350;
+
+        // Logs management
+        let logsAutoUpdate = true;
+        let logsPaused = false;
+        let logsUpdateInterval = null;
+        let lastLogTimestamp = null;
+
+        // Utility function to escape HTML
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
         // Initialize
         async function init() {
-            await loadStats();
-            await loadTables();
-            await loadSources();
+            console.log('🔄 Initializing database viewer...');
+            await refreshDatabase();
+            await loadLogs();
+            startLogsAutoUpdate();
+            initSidebarResizer();
         }
 
-        // Load sources with delete buttons
+        // Backend connectivity
+        function setBackendStatus(isUp) {
+            backendOnline = isUp;
+            const banner = document.getElementById('offlineBanner');
+            if (banner) {
+                banner.style.display = isUp ? 'none' : 'flex';
+            }
+            if (isUp && retryTimer) {
+                clearTimeout(retryTimer);
+                retryTimer = null;
+            } else if (!isUp && !retryTimer) {
+                retryTimer = setTimeout(() => refreshDatabase(true), 5000);
+            }
+        }
+
+        function manualRetry() {
+            if (retryTimer) {
+                clearTimeout(retryTimer);
+                retryTimer = null;
+            }
+            refreshDatabase(true);
+        }
+
+        // Refresh all database data
+        async function refreshDatabase(force = false) {
+            if (isRefreshing && !force) return;
+
+            isRefreshing = true;
+            const refreshBtn = document.getElementById('refreshBtn');
+            
+            if (refreshBtn) {
+                refreshBtn.classList.add('refreshing');
+                refreshBtn.disabled = true;
+            }
+
+            try {
+                document.getElementById('statsRow').innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Refreshing database...</p></div>';
+                document.getElementById('tableList').innerHTML = '<div class="loading">Refreshing tables...</div>';
+                document.getElementById('sourcesList').innerHTML = '<div class="loading">Refreshing sources...</div>';
+
+                await Promise.all([loadStats(), loadTables(), loadSources()]);
+
+                if (currentTable) {
+                    await loadTable(currentTable, currentPage);
+                } else {
+                    document.getElementById('dataContainer').innerHTML = '<div class="loading"><p>Select a table or execute a query to view data</p></div>';
+                }
+
+                stopLogsAutoUpdate();
+                await loadLogs();
+                startLogsAutoUpdate();
+
+                setBackendStatus(true);
+            } catch (error) {
+                console.error('Error refreshing:', error);
+                setBackendStatus(false);
+                document.getElementById('statsRow').innerHTML = `<div style="background: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 12px; color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3);"><strong>Connection Error:</strong> ${error.message}</div>`;
+            } finally {
+                isRefreshing = false;
+                if (refreshBtn) {
+                    refreshBtn.classList.remove('refreshing');
+                    refreshBtn.disabled = false;
+                }
+            }
+        }
+
+        // Load sources
         async function loadSources() {
             try {
-                const response = await fetch(`${API_BASE}/api/sources`);
+                const response = await fetch(`${API_BASE}/api/sources`, {
+                    cache: 'no-cache',
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
                 const sources = await response.json();
-
                 const container = document.getElementById('sourcesList');
                 container.innerHTML = '';
 
                 sources.forEach(source => {
                     const card = document.createElement('div');
-                    card.style.cssText = 'background: #f8f9fa; padding: 15px; border-radius: 8px; min-width: 250px; border: 2px solid #e0e0e0;';
+                    card.className = 'source-card';
                     card.innerHTML = `
-                        <div style="font-weight: 600; margin-bottom: 8px; color: #333;">${source.name}</div>
-                        <div style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">
-                            Last scraped: ${source.last_scraped ? new Date(source.last_scraped).toLocaleString() : 'Never'}
-                        </div>
-                        <button onclick="deleteSourceData(${source.id}, '${source.name}')"
-                                style="padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; width: 100%;">
+                        <h4>${source.name}</h4>
+                        <p>Last scraped: ${source.last_scraped ? new Date(source.last_scraped).toLocaleString() : 'Never'}</p>
+                        <button class="btn-danger btn-small" onclick="deleteSourceData(${source.id}, '${source.name}')">
                             🗑️ Delete All Data
                         </button>
                     `;
                     container.appendChild(card);
                 });
             } catch (error) {
-                console.error('Error loading sources:', error);
+                document.getElementById('sourcesList').innerHTML = `<p style="color: #fca5a5;">⚠️ Error: ${error.message}</p>`;
+                throw error;
             }
         }
 
-        // Delete all data for a source
+        // Delete source data
         async function deleteSourceData(sourceId, sourceName) {
-            if (!confirm(`Are you sure you want to delete ALL listings and schedules from "${sourceName}"?\n\nThis action cannot be undone!`)) {
-                return;
-            }
+            if (!confirm(`Delete ALL listings from "${sourceName}"?`)) return;
 
             try {
-                const response = await fetch(`${API_BASE}/api/sources/${sourceId}/data`, {
-                    method: 'DELETE'
-                });
+                const response = await fetch(`${API_BASE}/api/sources/${sourceId}/data`, { method: 'DELETE' });
                 const result = await response.json();
-
                 alert(`✅ ${result.message}`);
-
-                // Reload stats and current table if showing listings
                 await loadStats();
                 if (currentTable === 'listings' || currentTable === 'schedules') {
                     await loadTable(currentTable, currentPage);
                 }
             } catch (error) {
-                console.error('Error deleting source data:', error);
-                alert('❌ Error deleting source data. Please try again.');
+                alert('❌ Error deleting data');
             }
         }
 
-        // Load database stats
+        // Load stats
         async function loadStats() {
             try {
-                const response = await fetch(`${API_BASE}/db/stats`);
+                const response = await fetch(`${API_BASE}/db/stats`, {
+                    cache: 'no-cache',
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
                 const stats = await response.json();
-
                 const container = document.getElementById('statsRow');
                 container.innerHTML = '';
 
-                // Extract database size
                 const dbSize = stats._database_size_mb;
                 delete stats._database_size_bytes;
                 delete stats._database_size_mb;
 
-                // Show database size
                 if (dbSize) {
                     container.innerHTML += `
                         <div class="stat-card">
@@ -456,7 +1082,6 @@
                     `;
                 }
 
-                // Show table counts
                 for (const [table, count] of Object.entries(stats)) {
                     container.innerHTML += `
                         <div class="stat-card">
@@ -466,16 +1091,22 @@
                     `;
                 }
             } catch (error) {
-                console.error('Error loading stats:', error);
+                document.getElementById('statsRow').innerHTML = `<div style="background: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 12px; color: #fca5a5;"><strong>Error:</strong> ${error.message}</div>`;
+                throw error;
             }
         }
 
         // Load tables
         async function loadTables() {
             try {
-                const response = await fetch(`${API_BASE}/db/tables`);
+                const response = await fetch(`${API_BASE}/db/tables`, {
+                    cache: 'no-cache',
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
                 const data = await response.json();
-
                 const container = document.getElementById('tableList');
                 container.innerHTML = '';
 
@@ -487,8 +1118,8 @@
                     container.appendChild(btn);
                 });
             } catch (error) {
-                console.error('Error loading tables:', error);
-                document.getElementById('tableList').innerHTML = '<p style="color: red;">Error loading tables</p>';
+                document.getElementById('tableList').innerHTML = `<p style="color: #fca5a5;">⚠️ ${error.message}</p>`;
+                throw error;
             }
         }
 
@@ -497,12 +1128,8 @@
             currentTable = tableName;
             currentPage = page;
 
-            // Update active button
             document.querySelectorAll('.table-btn').forEach(btn => {
-                btn.classList.remove('active');
-                if (btn.textContent === tableName) {
-                    btn.classList.add('active');
-                }
+                btn.classList.toggle('active', btn.textContent === tableName);
             });
 
             const container = document.getElementById('dataContainer');
@@ -513,14 +1140,13 @@
                 const data = await response.json();
 
                 if (data.error) {
-                    container.innerHTML = `<p style="color: red;">${data.error}</p>`;
+                    container.innerHTML = `<p style="color: #fca5a5;">${data.error}</p>`;
                     return;
                 }
 
                 displayTableData(data);
             } catch (error) {
-                console.error('Error loading table:', error);
-                container.innerHTML = '<p style="color: red;">Error loading table data</p>';
+                container.innerHTML = '<p style="color: #fca5a5;">Error loading table data</p>';
             }
         }
 
@@ -530,20 +1156,20 @@
 
             let html = `
                 <div class="table-info">
-                    <div>
-                        <strong>${data.table}</strong> -
-                        ${data.total_count} rows total
-                    </div>
-                    <div>
-                        Page ${data.page} of ${data.total_pages}
-                    </div>
+                    <div><strong>${data.table}</strong> - ${data.total_count} rows total</div>
+                    <div>Page ${data.page} of ${data.total_pages}</div>
                 </div>
             `;
 
             if (data.data.length === 0) {
-                html += '<p>No data in this table</p>';
+                html += '<p style="color: var(--text-muted); text-align: center; padding: 40px;">No data in this table</p>';
             } else {
-                html += '<table><thead><tr>';
+                html += '<div class="table-wrapper"><table><thead><tr>';
+                
+                if (data.table === 'listings') {
+                    html += `<th style="min-width: 130px;">Actions</th>`;
+                }
+                
                 data.columns.forEach(col => {
                     html += `<th>${col}</th>`;
                 });
@@ -551,45 +1177,55 @@
 
                 data.data.forEach(row => {
                     html += '<tr>';
+
+                    if (data.table === 'listings') {
+                        const listingId = row['id'];
+                        html += `<td>
+                            <button class="btn-success btn-small" onclick="refreshSingleListing(${listingId})">Refresh</button>
+                            <button class="btn-danger btn-small" style="margin-left: 4px;" onclick="deleteSingleListing(${listingId})">Delete</button>
+                        </td>`;
+                    }
+
                     data.columns.forEach(col => {
                         const value = row[col];
                         let displayValue = value;
 
-                        // Check if it's JSON
                         if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
                             try {
                                 JSON.parse(value);
-                                displayValue = `<span class="json-cell" onclick='showJson(${JSON.stringify(value).replace(/'/g, "&#39;")})'>${value}</span>`;
+                                displayValue = `<span class="json-cell" onclick='showJson(${JSON.stringify(value).replace(/'/g, "&#39;")})'>[JSON]</span>`;
                             } catch (e) {
                                 displayValue = value;
                             }
                         } else if (value === null) {
-                            displayValue = '<em style="color: #999;">null</em>';
+                            displayValue = '<em style="color: var(--text-muted);">null</em>';
                         } else if (typeof value === 'boolean') {
                             displayValue = value ? '✓' : '✗';
                         }
 
                         html += `<td>${displayValue}</td>`;
                     });
+
                     html += '</tr>';
                 });
 
-                html += '</tbody></table>';
+                html += '</tbody></table></div>';
 
-                // Add pagination
                 if (data.total_pages > 1) {
-                    html += '<div class="pagination">';
-                    html += `<button class="page-btn" onclick="loadTable('${data.table}', ${data.page - 1})" ${data.page === 1 ? 'disabled' : ''}>← Previous</button>`;
-                    html += `<span>Page ${data.page} of ${data.total_pages}</span>`;
-                    html += `<button class="page-btn" onclick="loadTable('${data.table}', ${data.page + 1})" ${data.page === data.total_pages ? 'disabled' : ''}>Next →</button>`;
-                    html += '</div>';
+                    html += `
+                        <div class="pagination">
+                            <button class="page-btn" onclick="loadTable('${data.table}', ${data.page - 1})" ${data.page === 1 ? 'disabled' : ''}>← Previous</button>
+                            <span style="color: var(--text-secondary);">Page ${data.page} of ${data.total_pages}</span>
+                            <button class="page-btn" onclick="loadTable('${data.table}', ${data.page + 1})" ${data.page === data.total_pages ? 'disabled' : ''}>Next →</button>
+                        </div>
+                    `;
                 }
             }
 
             container.innerHTML = html;
         }
 
-        // Execute custom query
+        // Execute query
         async function executeQuery() {
             const sql = document.getElementById('sqlQuery').value.trim();
             if (!sql) {
@@ -605,21 +1241,16 @@
                 const data = await response.json();
 
                 if (data.error) {
-                    container.innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+                    container.innerHTML = `<p style="color: #fca5a5;">Error: ${data.error}</p>`;
                     return;
                 }
 
-                // Display as table
-                let html = `
-                    <div class="table-info">
-                        <div><strong>Query Results</strong> - ${data.count} rows</div>
-                    </div>
-                `;
+                let html = `<div class="table-info"><div><strong>Query Results</strong> - ${data.count} rows</div></div>`;
 
                 if (data.data.length === 0) {
-                    html += '<p>Query returned no results</p>';
+                    html += '<p style="color: var(--text-muted); text-align: center; padding: 40px;">Query returned no results</p>';
                 } else {
-                    html += '<table><thead><tr>';
+                    html += '<div style="overflow-x: auto;"><table><thead><tr>';
                     data.columns.forEach(col => {
                         html += `<th>${col}</th>`;
                     });
@@ -634,12 +1265,12 @@
                             if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
                                 try {
                                     JSON.parse(value);
-                                    displayValue = `<span class="json-cell" onclick='showJson(${JSON.stringify(value).replace(/'/g, "&#39;")})'>${value}</span>`;
+                                    displayValue = `<span class="json-cell" onclick='showJson(${JSON.stringify(value).replace(/'/g, "&#39;")})'>[JSON]</span>`;
                                 } catch (e) {
                                     displayValue = value;
                                 }
                             } else if (value === null) {
-                                displayValue = '<em style="color: #999;">null</em>';
+                                displayValue = '<em style="color: var(--text-muted);">null</em>';
                             }
 
                             html += `<td>${displayValue}</td>`;
@@ -647,45 +1278,488 @@
                         html += '</tr>';
                     });
 
-                    html += '</tbody></table>';
+                    html += '</tbody></table></div>';
                 }
 
                 container.innerHTML = html;
             } catch (error) {
-                console.error('Error executing query:', error);
-                container.innerHTML = '<p style="color: red;">Error executing query</p>';
+                container.innerHTML = '<p style="color: #fca5a5;">Error executing query</p>';
             }
         }
 
-        // Show JSON in modal
+        // JSON Modal
         function showJson(jsonString) {
             const modal = document.getElementById('jsonModal');
             const content = document.getElementById('jsonContent');
-
             try {
-                const parsed = JSON.parse(jsonString);
-                content.textContent = JSON.stringify(parsed, null, 2);
-                modal.classList.add('show');
+                content.textContent = JSON.stringify(JSON.parse(jsonString), null, 2);
             } catch (e) {
                 content.textContent = jsonString;
-                modal.classList.add('show');
             }
+            modal.classList.add('show');
         }
 
-        // Close modal
         function closeModal() {
             document.getElementById('jsonModal').classList.remove('show');
         }
 
-        // Close modal on background click
         document.getElementById('jsonModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeModal();
+            if (e.target === this) closeModal();
+        });
+
+        document.getElementById('extractionModal').addEventListener('click', function(e) {
+            if (e.target === this) closeExtractionModal();
+        });
+
+        // Logs
+        async function loadLogs() {
+            try {
+                const url = lastLogTimestamp 
+                    ? `${API_BASE}/db/logs?lines=200&since=${encodeURIComponent(lastLogTimestamp)}`
+                    : `${API_BASE}/db/logs?lines=200`;
+                
+                const response = await fetch(url, {
+                    cache: 'no-cache',
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        document.getElementById('logsContainer').innerHTML = `<div style="color: #fbbf24; text-align: center; padding: 20px;">
+                            <p><strong>⚠️ Logs endpoint not available</strong></p>
+                            <p>Please restart the backend server.</p>
+                        </div>`;
+                        stopLogsAutoUpdate();
+                        return;
+                    }
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                const container = document.getElementById('logsContainer');
+                const countEl = document.getElementById('logsCount');
+
+                if (!data.file_exists) {
+                    container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 20px;">${data.message || 'No logs yet.'}</div>`;
+                    countEl.textContent = '0 lines';
+                    return;
+                }
+
+                countEl.textContent = `${data.total_lines} lines`;
+
+                if (data.logs && data.logs.length > 0) {
+                    let html = '';
+                    if (!logsPaused) {
+                        const allLogsResponse = await fetch(`${API_BASE}/db/logs?lines=500`, {
+                            cache: 'no-cache',
+                            headers: { 'Cache-Control': 'no-cache' }
+                        });
+                        const allLogsData = await allLogsResponse.json();
+                        if (allLogsData.logs) {
+                            allLogsData.logs.forEach(line => {
+                                html += formatLogLine(line);
+                            });
+                        }
+                    } else {
+                        html = container.innerHTML;
+                        data.logs.forEach(line => {
+                            html += formatLogLine(line);
+                        });
+                    }
+
+                    container.innerHTML = html;
+
+                    if (!logsPaused) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+
+                    if (data.last_updated) {
+                        lastLogTimestamp = data.last_updated;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading logs:', error);
+            }
+        }
+
+        function formatLogLine(line) {
+            let className = '';
+            if (line.includes('ERROR') || line.includes('CRITICAL')) className = 'error';
+            else if (line.includes('WARNING') || line.includes('WARN')) className = 'warning';
+            else if (line.includes('INFO')) className = 'info';
+            else if (line.includes('DEBUG')) className = 'debug';
+
+            const div = document.createElement('div');
+            div.textContent = line;
+            return `<div class="log-line ${className}">${div.innerHTML}</div>`;
+        }
+
+        function toggleLogsPause() {
+            logsPaused = !logsPaused;
+            const pauseIcon = document.getElementById('pauseIcon');
+            const pauseText = document.getElementById('pauseText');
+            const indicator = document.getElementById('autoScrollIndicator');
+            const statusText = document.getElementById('logsStatusText');
+
+            if (logsPaused) {
+                pauseIcon.textContent = '▶️';
+                pauseText.textContent = 'Resume';
+                indicator.classList.add('paused');
+                statusText.textContent = 'Paused';
+            } else {
+                pauseIcon.textContent = '⏸️';
+                pauseText.textContent = 'Pause';
+                indicator.classList.remove('paused');
+                statusText.textContent = 'Auto-updating...';
+                document.getElementById('logsContainer').scrollTop = document.getElementById('logsContainer').scrollHeight;
+            }
+        }
+
+        async function refreshLogs() {
+            lastLogTimestamp = null;
+            await loadLogs();
+        }
+
+        function startLogsAutoUpdate() {
+            if (logsUpdateInterval) clearInterval(logsUpdateInterval);
+            logsUpdateInterval = setInterval(() => {
+                if (logsAutoUpdate && !logsPaused) loadLogs();
+            }, 2000);
+        }
+
+        function stopLogsAutoUpdate() {
+            if (logsUpdateInterval) {
+                clearInterval(logsUpdateInterval);
+                logsUpdateInterval = null;
+            }
+        }
+
+        async function restartBackend() {
+            if (!confirm('Restart the backend server?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/db/restart`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert(`✅ ${data.message}`);
+                    setTimeout(() => {
+                        lastLogTimestamp = null;
+                        loadLogs();
+                    }, 1000);
+                } else {
+                    alert(`❌ ${data.detail || 'Failed to restart'}`);
+                }
+            } catch (error) {
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
+
+        // Sidebar
+        function toggleSidebar() {
+            const sidebar = document.getElementById('leftSidebar');
+            const wrapper = document.getElementById('sidebarWrapper');
+            const toggle = document.getElementById('sidebarToggle');
+            const toggleText = document.getElementById('sidebarToggleText');
+            
+            if (!sidebar || !toggle || !wrapper) return;
+            
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            sidebar.classList.toggle('collapsed');
+            wrapper.classList.toggle('collapsed');
+            
+            if (isCollapsed) {
+                toggle.classList.add('expanded');
+                toggle.classList.remove('collapsed');
+                toggleText.textContent = '◀ Tools';
+                wrapper.style.width = `${SIDEBAR_DEFAULT}px`;
+            } else {
+                toggle.classList.remove('expanded');
+                toggle.classList.add('collapsed');
+                toggleText.textContent = '▶ Tools';
+                wrapper.style.width = '0px';
+            }
+        }
+
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            if (!section) return;
+            
+            const icon = section.querySelector('.collapse-icon');
+            section.classList.toggle('collapsed');
+            
+            if (icon) {
+                icon.textContent = section.classList.contains('collapsed') ? '▶' : '▼';
+            }
+        }
+
+        function initSidebarResizer() {
+            const resizer = document.getElementById('sidebarResizer');
+            const wrapper = document.getElementById('sidebarWrapper');
+            if (!resizer || !wrapper) return;
+
+            let isDragging = false;
+
+            resizer.addEventListener('mousedown', (e) => {
+                if (wrapper.classList.contains('collapsed')) return;
+                isDragging = true;
+                document.body.style.userSelect = 'none';
+                document.body.style.cursor = 'col-resize';
+                e.preventDefault();
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const rect = wrapper.getBoundingClientRect();
+                const newWidth = Math.min(Math.max(e.clientX - rect.left, SIDEBAR_MIN), SIDEBAR_MAX);
+                wrapper.style.width = `${newWidth}px`;
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    document.body.style.userSelect = '';
+                    document.body.style.cursor = '';
+                }
+            });
+        }
+
+        // Listing actions
+        async function refreshSingleListing(listingId) {
+            try {
+                // Show loading in modal
+                showExtractionModal('Loading extraction details...', true);
+                
+                // Fetch debug extraction info
+                const res = await fetch(`${API_BASE}/api/listings/${listingId}/debug-extraction`);
+                if (!res.ok) {
+                    const error = await res.json();
+                    throw new Error(error.detail || 'Failed to fetch extraction data');
+                }
+                
+                const debugData = await res.json();
+                showExtractionDetails(debugData);
+                
+            } catch (e) {
+                showExtractionModal(`<div style="color: #f87171;">Error: ${e.message}</div>`, false);
+            }
+        }
+
+        function showExtractionModal(content, isLoading = false, listingId = null) {
+            const modal = document.getElementById('extractionModal');
+            const modalContent = document.getElementById('extractionContent');
+            
+            if (isLoading) {
+                modalContent.innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <div class="loading-spinner"></div>
+                        <p style="margin-top: 16px; color: var(--text-secondary);">${content}</p>
+                    </div>
+                `;
+            } else {
+                // Add Apply Changes button at the bottom if we have a listingId
+                let finalContent = content;
+                if (listingId) {
+                    finalContent += `
+                        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color); text-align: center;">
+                            <button onclick="applyExtractionChanges(${listingId})" 
+                                    style="padding: 12px 24px; background: var(--accent-gradient); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem;">
+                                ✨ Apply Changes to Database
+                            </button>
+                            <p style="margin-top: 8px; font-size: 0.8rem; color: var(--text-muted);">
+                                This will update the listing with the newly scraped values shown above.
+                            </p>
+                        </div>
+                    `;
+                }
+                modalContent.innerHTML = finalContent;
+            }
+            
+            modal.classList.add('show');
+        }
+
+        function showExtractionDetails(debugData) {
+            const { profile_url, profile_data, extractions, text_snippets, current_db_values } = debugData;
+            
+            let html = `
+                <h3 style="color: var(--accent-primary); margin-bottom: 16px;">🔍 Extraction Debug Info</h3>
+                <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">
+                    Profile URL: <a href="${profile_url}" target="_blank" style="color: var(--accent-primary);">${profile_url}</a>
+                </p>
+                
+                <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                    <thead>
+                        <tr style="background: var(--bg-tertiary);">
+                            <th style="padding: 10px; text-align: left; border-bottom: 1px solid var(--border-color);">Field</th>
+                            <th style="padding: 10px; text-align: left; border-bottom: 1px solid var(--border-color);">Matched</th>
+                            <th style="padding: 10px; text-align: left; border-bottom: 1px solid var(--border-color);">Raw Text Found</th>
+                            <th style="padding: 10px; text-align: left; border-bottom: 1px solid var(--border-color);">Extracted Value</th>
+                            <th style="padding: 10px; text-align: left; border-bottom: 1px solid var(--border-color);">DB Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            const fields = ['tier', 'age', 'nationality', 'ethnicity', 'height', 'weight', 'measurements', 'bust', 'eye_color', 'hair_color', 'service_type'];
+            
+            for (const field of fields) {
+                const ext = extractions[field] || {};
+                const dbVal = current_db_values[field];
+                const matched = ext.matched;
+                const matchIcon = matched ? '✅' : '❌';
+                const matchColor = matched ? '#34d399' : '#f87171';
+                
+                html += `
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                        <td style="padding: 10px; font-weight: 600; color: var(--text-primary);">${field}</td>
+                        <td style="padding: 10px; color: ${matchColor};">${matchIcon}</td>
+                        <td style="padding: 10px; color: var(--text-secondary); font-family: monospace; font-size: 0.8rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis;">
+                            ${ext.raw_text ? escapeHtml(ext.raw_text) : '<em>-</em>'}
+                        </td>
+                        <td style="padding: 10px; color: ${matched ? '#34d399' : 'var(--text-muted)'};">
+                            ${ext.final_value !== undefined ? ext.final_value : '<em>null</em>'}
+                            ${ext.note ? `<br><small style="color: var(--text-muted);">${ext.note}</small>` : ''}
+                            ${ext.source ? `<br><small style="color: var(--accent-primary);">via ${ext.source}</small>` : ''}
+                        </td>
+                        <td style="padding: 10px; color: var(--text-secondary);">
+                            ${dbVal !== null && dbVal !== undefined ? dbVal : '<em>null</em>'}
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            html += `
+                    </tbody>
+                </table>
+                </div>
+            `;
+            
+            // Text snippets section
+            if (text_snippets && Object.keys(text_snippets).length > 0) {
+                html += `
+                    <h4 style="color: var(--accent-primary); margin: 24px 0 12px;">📝 Text Snippets Found</h4>
+                    <div style="background: var(--bg-tertiary); padding: 16px; border-radius: 8px; font-family: monospace; font-size: 0.8rem;">
+                `;
+                for (const [field, snippet] of Object.entries(text_snippets)) {
+                    html += `<div style="margin-bottom: 8px;"><strong style="color: var(--accent-primary);">${field}:</strong> <span style="color: var(--text-secondary);">${escapeHtml(snippet)}</span></div>`;
+                }
+                html += `</div>`;
+            }
+            
+            // Images section
+            if (extractions.images) {
+                html += `
+                    <h4 style="color: var(--accent-primary); margin: 24px 0 12px;">🖼️ Images Found: ${extractions.images.count}</h4>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem;">
+                        ${extractions.images.final_value.length > 0 ? extractions.images.final_value.join(', ') : 'No images found'}
+                    </div>
+                `;
+            }
+            
+            // Tags section
+            if (extractions.tags) {
+                html += `
+                    <h4 style="color: var(--accent-primary); margin: 24px 0 12px;">🏷️ Tags Found</h4>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem;">
+                        ${extractions.tags.final_value.length > 0 ? extractions.tags.final_value.join(', ') : 'No tags matched'}
+                    </div>
+                `;
+            }
+            
+            // Tier rates section
+            if (debugData.tier_rates) {
+                const rates = debugData.tier_rates;
+                html += `
+                    <h4 style="color: var(--accent-primary); margin: 24px 0 12px;">💰 Tier Rates (from tiers table)</h4>
+                    <div style="background: var(--bg-tertiary); padding: 16px; border-radius: 8px; font-size: 0.85rem;">
+                        <div style="margin-bottom: 8px;"><strong>Tier:</strong> ${rates.tier} (⭐${rates.star})</div>
+                        <div style="margin-bottom: 8px;"><strong>30min:</strong> ${rates.incall_30min || 'N/A'}</div>
+                        <div style="margin-bottom: 8px;"><strong>45min:</strong> ${rates.incall_45min || 'N/A'}</div>
+                        <div style="margin-bottom: 8px;"><strong>1hr:</strong> ${rates.incall_1hr || 'N/A'}</div>
+                        <div><strong>Outcall/hr:</strong> ${rates.outcall_per_hr || 'N/A'}</div>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <h4 style="color: var(--accent-primary); margin: 24px 0 12px;">💰 Tier Rates</h4>
+                    <div style="color: var(--text-muted); font-size: 0.85rem;">No tier rates found (tier not matched in tiers table)</div>
+                `;
+            }
+            
+            showExtractionModal(html, false, debugData.current_db_values?.id);
+        }
+
+        function closeExtractionModal() {
+            document.getElementById('extractionModal').classList.remove('show');
+        }
+
+        async function applyExtractionChanges(listingId) {
+            if (!listingId) return;
+            
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Applying...';
+            
+            try {
+                const res = await fetch(`${API_BASE}/api/listings/${listingId}/refresh`, { method: 'POST' });
+                if (!res.ok) {
+                    const error = await res.json();
+                    throw new Error(error.detail || 'Failed to apply changes');
+                }
+                
+                const updated = await res.json();
+                
+                // Show success and close modal
+                btn.textContent = '✅ Applied!';
+                btn.style.background = '#22c55e';
+                
+                // Refresh the table after a short delay
+                setTimeout(() => {
+                    closeExtractionModal();
+                    if (currentTable === 'listings') {
+                        loadTable('listings', currentPage);
+                    }
+                }, 1000);
+                
+            } catch (e) {
+                btn.textContent = '❌ Failed';
+                btn.style.background = '#ef4444';
+                alert('Error: ' + e.message);
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.textContent = '✨ Apply Changes to Database';
+                    btn.style.background = '';
+                }, 2000);
+            }
+        }
+
+        async function deleteSingleListing(listingId) {
+            if (!confirm('Delete this listing?')) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/listings/${listingId}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Failed');
+                if (currentTable === 'listings') await loadTable('listings', currentPage);
+            } catch (e) {
+                alert(`Error: ${e.message}`);
+            }
+        }
+
+        // Initialize
+        window.addEventListener('load', init);
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && !isRefreshing) {
+                refreshDatabase();
+                if (!logsPaused) loadLogs();
             }
         });
 
-        // Initialize on load
-        init();
+        window.addEventListener('beforeunload', stopLogsAutoUpdate);
     </script>
 </body>
 </html>

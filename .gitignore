@@ -28,6 +28,7 @@ Thumbs.db
 # Logs
 *.log
 server.log
+logs/
 
 # Environment
 .env
