@@ -154,18 +154,34 @@ def stop_backend():
     with backend_lock:
         if backend_process:
             print("🔄 Stopping backend...")
-            backend_process.terminate()
             try:
-                backend_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                backend_process.kill()
-            backend_process = None
+                backend_process.terminate()
+                try:
+                    backend_process.wait(timeout=5)
+                except (subprocess.TimeoutExpired, KeyboardInterrupt):
+                    # Force kill if it doesn't stop gracefully
+                    try:
+                        backend_process.kill()
+                        backend_process.wait(timeout=2)
+                    except (subprocess.TimeoutExpired, KeyboardInterrupt):
+                        pass  # Process will be cleaned up by OS
+            except Exception as e:
+                print(f"⚠️  Error stopping backend: {e}")
+                try:
+                    backend_process.kill()
+                except:
+                    pass
+            finally:
+                backend_process = None
 
-            # Wait for port to be released
-            for _ in range(10):
-                if not check_backend_running():
-                    break
-                time.sleep(0.5)
+            # Wait for port to be released (with timeout to avoid hanging)
+            try:
+                for _ in range(10):
+                    if not check_backend_running():
+                        break
+                    time.sleep(0.5)
+            except KeyboardInterrupt:
+                pass  # Allow immediate exit
 
 
 def restart_backend():

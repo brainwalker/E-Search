@@ -7,7 +7,9 @@ This includes realistic browser fingerprints, proper headers, and human-like beh
 
 import asyncio
 import random
+import os
 from typing import Optional, Dict
+from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 import logging
@@ -64,79 +66,222 @@ class StealthCrawler:
 
     async def _init_browser(self):
         """Initialize browser and context if not already done."""
-        if self._browser is None:
-            self._playwright = await async_playwright().start()
+        if self._browser is None or not await self._check_context_valid():
+            # Clean up existing resources if any
+            if self._context:
+                try:
+                    await self._context.close()
+                except:
+                    pass
+            if self._browser:
+                try:
+                    await self._browser.close()
+                except:
+                    pass
+            if self._playwright:
+                try:
+                    await self._playwright.stop()
+                except:
+                    pass
             
-            # Launch browser with stealth settings
-            self._browser = await self._playwright.chromium.launch(
-                headless=self.headless,
-                args=[
-                    '--disable-blink-features=AutomationControlled',
-                    '--disable-dev-shm-usage',
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process',
-                ]
-            )
+            # Small delay to let resources free up
+            await asyncio.sleep(0.5)
             
-            # Create context with realistic viewport and user agent
-            self._context = await self._browser.new_context(
-                viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                locale='en-US',
-                timezone_id='America/Toronto',
-                extra_http_headers={
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'DNT': '1',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1',
-                    'Sec-Fetch-Dest': 'document',
-                    'Sec-Fetch-Mode': 'navigate',
-                    'Sec-Fetch-Site': 'none',
-                    'Sec-Fetch-User': '?1',
-                    'Cache-Control': 'max-age=0',
-                }
-            )
-            
-            # Add script to hide automation indicators
-            await self._context.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
+            try:
+                # Start Playwright
+                self._playwright = await async_playwright().start()
                 
-                // Override plugins
-                Object.defineProperty(navigator, 'plugins', {
-                    get: () => [1, 2, 3, 4, 5]
-                });
+                # Verify Chromium is installed
+                try:
+                    chromium_path = self._playwright.chromium.executable_path
+                    if not chromium_path or not os.path.exists(chromium_path):
+                        raise Exception("Chromium browser not found. Run: playwright install chromium")
+                except Exception as e:
+                    logger.error(f"Chromium check failed: {e}")
+                    raise Exception(f"Chromium browser not properly installed: {e}")
                 
-                // Override languages
-                Object.defineProperty(navigator, 'languages', {
-                    get: () => ['en-US', 'en']
-                });
+                # Launch browser with stealth settings and increased stability options
+                logger.debug("Launching Chromium browser...")
+                self._browser = await self._playwright.chromium.launch(
+                    headless=self.headless,
+                    args=[
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-dev-shm-usage',
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-web-security',
+                        '--disable-features=IsolateOrigins,site-per-process',
+                        '--disable-background-timer-throttling',
+                        '--disable-backgrounding-occluded-windows',
+                        '--disable-renderer-backgrounding',
+                        '--disable-gpu',  # Disable GPU to reduce crashes
+                    ],
+                    handle_sigint=False,
+                    handle_sigterm=False,
+                    handle_sighup=False,
+                )
                 
-                // Override permissions
-                const originalQuery = window.navigator.permissions.query;
-                window.navigator.permissions.query = (parameters) => (
-                    parameters.name === 'notifications' ?
-                        Promise.resolve({ state: Notification.permission }) :
-                        originalQuery(parameters)
-                );
-            """)
+                # Verify browser started successfully
+                if not self._browser.is_connected():
+                    raise Exception("Browser launched but not connected")
+                
+                # Small delay to let browser stabilize
+                await asyncio.sleep(0.3)
+                
+                # Create context with realistic viewport and user agent
+                # Increased timeout and better connection handling
+                self._context = await self._browser.new_context(
+                    viewport={'width': 1920, 'height': 1080},
+                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    locale='en-US',
+                    timezone_id='America/Toronto',
+                    ignore_https_errors=True,
+                    extra_http_headers={
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'DNT': '1',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1',
+                        'Sec-Fetch-Dest': 'document',
+                        'Sec-Fetch-Mode': 'navigate',
+                        'Sec-Fetch-Site': 'none',
+                        'Sec-Fetch-User': '?1',
+                        'Cache-Control': 'max-age=0',
+                    }
+                )
+                
+                # Verify context was created
+                if self._context is None:
+                    raise Exception("Failed to create browser context")
+                
+                # Add script to hide automation indicators
+                await self._context.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', {
+                        get: () => undefined
+                    });
+                    
+                    // Override plugins
+                    Object.defineProperty(navigator, 'plugins', {
+                        get: () => [1, 2, 3, 4, 5]
+                    });
+                    
+                    // Override languages
+                    Object.defineProperty(navigator, 'languages', {
+                        get: () => ['en-US', 'en']
+                    });
+                    
+                    // Override permissions
+                    const originalQuery = window.navigator.permissions.query;
+                    window.navigator.permissions.query = (parameters) => (
+                        parameters.name === 'notifications' ?
+                            Promise.resolve({ state: Notification.permission }) :
+                            originalQuery(parameters)
+                    );
+                """)
+                
+                # Test context by creating and immediately closing a test page
+                test_page = None
+                try:
+                    test_page = await self._context.new_page()
+                    await test_page.close()
+                    logger.debug("Browser initialization successful")
+                except Exception as e:
+                    logger.warning(f"Browser initialization test failed: {e}")
+                    if test_page:
+                        try:
+                            await test_page.close()
+                        except:
+                            pass
+                    raise Exception(f"Browser context not working: {e}")
+                    
+            except Exception as e:
+                logger.error(f"Failed to initialize browser: {e}")
+                # Clean up partial initialization
+                await self._cleanup()
+                raise
 
     async def _cleanup(self):
         """Clean up browser resources."""
         if self._context:
-            await self._context.close()
+            try:
+                await self._context.close()
+            except Exception as e:
+                logger.warning(f"Error closing context: {e}")
             self._context = None
         if self._browser:
-            await self._browser.close()
+            try:
+                await self._browser.close()
+            except Exception as e:
+                logger.warning(f"Error closing browser: {e}")
             self._browser = None
         if self._playwright:
-            await self._playwright.stop()
+            try:
+                await self._playwright.stop()
+            except Exception as e:
+                logger.warning(f"Error stopping playwright: {e}")
             self._playwright = None
+
+    async def _check_context_valid(self) -> bool:
+        """Check if browser context is still valid."""
+        try:
+            if self._context is None or self._browser is None:
+                return False
+            # Check if browser is still connected
+            if not self._browser.is_connected():
+                return False
+            # Try to access pages - if context is closed, this will fail
+            _ = self._context.pages  # Access to check if context is alive
+            return True
+        except Exception:
+            return False
+
+    async def _reinit_browser_if_needed(self):
+        """Reinitialize browser if context is closed."""
+        if not await self._check_context_valid():
+            logger.warning("Browser context closed, reinitializing...")
+            await self._cleanup()
+            # Longer delay before reinitializing to let resources free up
+            await asyncio.sleep(2)
+            try:
+                await self._init_browser()
+            except Exception as e:
+                logger.error(f"Failed to reinitialize browser: {e}")
+                raise
+
+    def _extract_domain(self, url: str) -> str:
+        """
+        Safely extract domain from URL.
+        
+        Handles URLs with or without protocol:
+        - "https://example.com/path" -> "example.com"
+        - "http://example.com" -> "example.com"
+        - "example.com" -> "example.com"
+        - "example.com/path" -> "example.com"
+        
+        Args:
+            url: URL string (with or without protocol)
+            
+        Returns:
+            Domain name as string
+            
+        Raises:
+            ValueError: If URL cannot be parsed
+        """
+        # Add protocol if missing to make urlparse work correctly
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+        
+        try:
+            parsed = urlparse(url)
+            domain = parsed.netloc or parsed.path.split('/')[0]
+            if not domain:
+                raise ValueError(f"Could not extract domain from URL: {url}")
+            # Remove port if present (e.g., "example.com:8080" -> "example.com")
+            domain = domain.split(':')[0]
+            return domain
+        except Exception as e:
+            raise ValueError(f"Failed to parse URL '{url}': {e}")
 
     async def fetch(
         self,
@@ -162,65 +307,128 @@ class StealthCrawler:
         """
         await self._wait_for_rate_limit()
         await self._init_browser()
+        await self._reinit_browser_if_needed()
 
         last_error = None
         for attempt in range(self.max_retries):
             page: Optional[Page] = None
             try:
-                page = await self._context.new_page()
+                # Check context before creating page - reinit if needed
+                if not await self._check_context_valid():
+                    logger.warning(f"Context invalid before attempt {attempt + 1}, reinitializing...")
+                    await self._reinit_browser_if_needed()
                 
-                # Set cookies if provided
-                if cookies:
-                    await self._context.add_cookies([
-                        {'name': k, 'value': v, 'url': url, 'domain': url.split('/')[2]}
-                        for k, v in cookies.items()
-                    ])
+                # Verify context is still valid after reinit
+                if not await self._check_context_valid():
+                    raise Exception("Failed to initialize browser context")
                 
-                # Navigate to page
-                response = await page.goto(
-                    url,
-                    wait_until='domcontentloaded',
-                    timeout=int(self.timeout * 1000)
-                )
+                # Clean up any orphaned pages before creating new one
+                try:
+                    existing_pages = self._context.pages
+                    # Close pages that might be stuck (keep max 2 open)
+                    if len(existing_pages) > 2:
+                        for old_page in existing_pages[:-2]:
+                            try:
+                                await old_page.close()
+                            except:
+                                pass
+                except:
+                    pass  # If we can't check pages, context might be dead
                 
-                if response and response.status >= 400:
-                    raise Exception(f"HTTP {response.status} for {url}")
+                # Create page with timeout protection
+                try:
+                    page = await asyncio.wait_for(
+                        self._context.new_page(),
+                        timeout=10.0
+                    )
+                except asyncio.TimeoutError:
+                    raise Exception("Timeout creating new page - browser may be unresponsive")
                 
-                # Wait for selector if specified
-                if wait_selector:
+                try:
+                    # Set cookies if provided
+                    if cookies:
+                        try:
+                            domain = self._extract_domain(url)
+                            await self._context.add_cookies([
+                                {'name': k, 'value': v, 'url': url, 'domain': domain}
+                                for k, v in cookies.items()
+                            ])
+                        except Exception as e:
+                            logger.warning(f"Failed to set cookies: {e}")
+                    
+                    # Navigate to page with increased timeout
+                    response = await page.goto(
+                        url,
+                        wait_until='domcontentloaded',
+                        timeout=int(self.timeout * 1000)
+                    )
+                    
+                    if response and response.status >= 400:
+                        raise Exception(f"HTTP {response.status} for {url}")
+                    
+                    # Wait for selector if specified
+                    if wait_selector:
+                        try:
+                            await page.wait_for_selector(wait_selector, timeout=10000)
+                        except Exception as e:
+                            logger.warning(f"Selector {wait_selector} not found: {e}")
+                    
+                    # Wait a bit for JavaScript to execute
+                    await asyncio.sleep(wait_time)
+                    
+                    # Simulate human-like behavior (scroll)
                     try:
-                        await page.wait_for_selector(wait_selector, timeout=10000)
+                        await page.evaluate("""
+                            window.scrollTo(0, document.body.scrollHeight / 3);
+                        """)
+                        await asyncio.sleep(0.5)
+                        await page.evaluate("""
+                            window.scrollTo(0, document.body.scrollHeight);
+                        """)
+                        await asyncio.sleep(0.3)
                     except Exception as e:
-                        logger.warning(f"Selector {wait_selector} not found: {e}")
-                
-                # Wait a bit for JavaScript to execute
-                await asyncio.sleep(wait_time)
-                
-                # Simulate human-like behavior (scroll)
-                await page.evaluate("""
-                    window.scrollTo(0, document.body.scrollHeight / 3);
-                """)
-                await asyncio.sleep(0.5)
-                await page.evaluate("""
-                    window.scrollTo(0, document.body.scrollHeight);
-                """)
-                await asyncio.sleep(0.3)
-                
-                # Get page content
-                content = await page.content()
-                await page.close()
-                return content
+                        logger.warning(f"Error during scroll simulation: {e}")
+                    
+                    # Get page content
+                    content = await page.content()
+                    return content
+
+                finally:
+                    # Always close page, even on error
+                    if page:
+                        try:
+                            await asyncio.wait_for(page.close(), timeout=5.0)
+                        except Exception as e:
+                            logger.warning(f"Error closing page: {e}")
+                            # If page close fails, context might be dead
+                            if 'connection' in str(e).lower() or 'closed' in str(e).lower():
+                                self._context = None
 
             except Exception as e:
                 last_error = e
+                
+                # Ensure page is closed even if we didn't get to finally block
                 if page:
                     try:
                         await page.close()
                     except:
                         pass
+                
+                # Check if error is due to closed context/browser
+                error_str = str(e).lower()
+                if any(keyword in error_str for keyword in ['connection closed', 'context', 'browser', 'driver']):
+                    logger.warning(f"Browser/context issue detected on attempt {attempt + 1}, will reinitialize")
+                    # Mark context as invalid to force reinit
+                    self._context = None
+                    self._browser = None
+                
                 logger.warning(f"Attempt {attempt + 1}/{self.max_retries} failed for {url}: {e}")
                 if attempt < self.max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    # Reinitialize browser if context was closed
+                    await self._reinit_browser_if_needed()
+                    # Longer backoff for connection issues
+                    backoff_time = min(2 ** attempt, 5)  # Cap at 5 seconds
+                    await asyncio.sleep(backoff_time)
 
         raise last_error or Exception(f"Failed to fetch {url} after {self.max_retries} attempts")
 

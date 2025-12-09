@@ -947,10 +947,22 @@
             if (banner) {
                 banner.style.display = isUp ? 'none' : 'flex';
             }
-            if (isUp && retryTimer) {
-                clearTimeout(retryTimer);
-                retryTimer = null;
-            } else if (!isUp && !retryTimer) {
+            if (isUp) {
+                // Backend is up - clear retry timer and resume auto-updates
+                if (retryTimer) {
+                    clearTimeout(retryTimer);
+                    retryTimer = null;
+                }
+                // Resume logs auto-update if it was enabled
+                if (logsAutoUpdate && !logsUpdateInterval) {
+                    startLogsAutoUpdate();
+                }
+            } else {
+                // Backend is down - stop all auto-updates and set retry timer
+                stopLogsAutoUpdate();
+                if (retryTimer) {
+                    clearTimeout(retryTimer);
+                }
                 retryTimer = setTimeout(() => refreshDatabase(true), 5000);
             }
         }
@@ -976,27 +988,54 @@
             }
 
             try {
+                // Check backend status first
+                if (!await checkBackendConnection()) {
+                    setBackendStatus(false);
+                    throw new Error('Backend is not responding');
+                }
+
                 document.getElementById('statsRow').innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Refreshing database...</p></div>';
                 document.getElementById('tableList').innerHTML = '<div class="loading">Refreshing tables...</div>';
                 document.getElementById('sourcesList').innerHTML = '<div class="loading">Refreshing sources...</div>';
 
-                await Promise.all([loadStats(), loadTables(), loadSources()]);
+                // Use Promise.allSettled to handle partial failures gracefully
+                const results = await Promise.allSettled([
+                    loadStats().catch(e => { setBackendStatus(false); throw e; }),
+                    loadTables().catch(e => { setBackendStatus(false); throw e; }),
+                    loadSources().catch(e => { setBackendStatus(false); throw e; })
+                ]);
 
-                if (currentTable) {
-                    await loadTable(currentTable, currentPage);
-                } else {
+                // Check if any requests failed
+                const failures = results.filter(r => r.status === 'rejected');
+                if (failures.length > 0) {
+                    const errorMessages = failures.map(r => r.reason?.message || 'Unknown error').join(', ');
+                    throw new Error(`Some requests failed: ${errorMessages}`);
+                }
+
+                if (currentTable && backendOnline) {
+                    await loadTable(currentTable, currentPage).catch(e => {
+                        if (e.message.includes('Failed to fetch') || e.message.includes('ERR_CONNECTION_REFUSED')) {
+                            setBackendStatus(false);
+                        }
+                    });
+                } else if (!currentTable) {
                     document.getElementById('dataContainer').innerHTML = '<div class="loading"><p>Select a table or execute a query to view data</p></div>';
                 }
 
-                stopLogsAutoUpdate();
-                await loadLogs();
-                startLogsAutoUpdate();
+                if (backendOnline) {
+                    stopLogsAutoUpdate();
+                    await loadLogs().catch(() => {}); // Silently fail logs
+                    startLogsAutoUpdate();
+                }
 
                 setBackendStatus(true);
             } catch (error) {
-                console.error('Error refreshing:', error);
+                // Only log non-connection errors
+                if (!error.message.includes('Failed to fetch') && !error.message.includes('ERR_CONNECTION_REFUSED') && !error.message.includes('not responding')) {
+                    console.error('Error refreshing:', error);
+                }
                 setBackendStatus(false);
-                document.getElementById('statsRow').innerHTML = `<div style="background: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 12px; color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3);"><strong>Connection Error:</strong> ${error.message}</div>`;
+                document.getElementById('statsRow').innerHTML = `<div style="background: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 12px; color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3);"><strong>Connection Error:</strong> Backend is not responding. Please check if the server is running.</div>`;
             } finally {
                 isRefreshing = false;
                 if (refreshBtn) {
@@ -1006,13 +1045,40 @@
             }
         }
 
+        // Quick backend connection check
+        async function checkBackendConnection() {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+                
+                const response = await fetch(`${API_BASE}/`, {
+                    signal: controller.signal,
+                    cache: 'no-cache'
+                });
+                
+                clearTimeout(timeoutId);
+                return response.ok;
+            } catch (error) {
+                return false;
+            }
+        }
+
         // Load sources
         async function loadSources() {
+            if (!backendOnline) {
+                return;
+            }
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+                
                 const response = await fetch(`${API_BASE}/api/sources`, {
                     cache: 'no-cache',
-                    headers: { 'Cache-Control': 'no-cache' }
+                    headers: { 'Cache-Control': 'no-cache' },
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
                 
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 
@@ -1033,6 +1099,9 @@
                     container.appendChild(card);
                 });
             } catch (error) {
+                if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+                    setBackendStatus(false);
+                }
                 document.getElementById('sourcesList').innerHTML = `<p style="color: #fca5a5;">⚠️ Error: ${error.message}</p>`;
                 throw error;
             }
@@ -1057,11 +1126,20 @@
 
         // Load stats
         async function loadStats() {
+            if (!backendOnline) {
+                return;
+            }
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+                
                 const response = await fetch(`${API_BASE}/db/stats`, {
                     cache: 'no-cache',
-                    headers: { 'Cache-Control': 'no-cache' }
+                    headers: { 'Cache-Control': 'no-cache' },
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
                 
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 
@@ -1091,6 +1169,9 @@
                     `;
                 }
             } catch (error) {
+                if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+                    setBackendStatus(false);
+                }
                 document.getElementById('statsRow').innerHTML = `<div style="background: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 12px; color: #fca5a5;"><strong>Error:</strong> ${error.message}</div>`;
                 throw error;
             }
@@ -1098,11 +1179,20 @@
 
         // Load tables
         async function loadTables() {
+            if (!backendOnline) {
+                return;
+            }
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+                
                 const response = await fetch(`${API_BASE}/db/tables`, {
                     cache: 'no-cache',
-                    headers: { 'Cache-Control': 'no-cache' }
+                    headers: { 'Cache-Control': 'no-cache' },
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
                 
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 
@@ -1118,6 +1208,9 @@
                     container.appendChild(btn);
                 });
             } catch (error) {
+                if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+                    setBackendStatus(false);
+                }
                 document.getElementById('tableList').innerHTML = `<p style="color: #fca5a5;">⚠️ ${error.message}</p>`;
                 throw error;
             }
@@ -1313,15 +1406,26 @@
 
         // Logs
         async function loadLogs() {
+            // Don't try to load logs if backend is known to be offline
+            if (!backendOnline) {
+                return;
+            }
+            
             try {
                 const url = lastLogTimestamp 
                     ? `${API_BASE}/db/logs?lines=200&since=${encodeURIComponent(lastLogTimestamp)}`
                     : `${API_BASE}/db/logs?lines=200`;
                 
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+                
                 const response = await fetch(url, {
                     cache: 'no-cache',
-                    headers: { 'Cache-Control': 'no-cache' }
+                    headers: { 'Cache-Control': 'no-cache' },
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     if (response.status === 404) {
@@ -1330,6 +1434,7 @@
                             <p>Please restart the backend server.</p>
                         </div>`;
                         stopLogsAutoUpdate();
+                        setBackendStatus(false);
                         return;
                     }
                     throw new Error(`HTTP ${response.status}`);
@@ -1378,7 +1483,12 @@
                     }
                 }
             } catch (error) {
-                console.error('Error loading logs:', error);
+                // Only log error if it's not a connection refused (backend is down)
+                if (!error.message.includes('Failed to fetch') && !error.message.includes('ERR_CONNECTION_REFUSED')) {
+                    console.error('Error loading logs:', error);
+                }
+                // Mark backend as offline and stop auto-updates
+                setBackendStatus(false);
             }
         }
 
@@ -1422,8 +1532,14 @@
 
         function startLogsAutoUpdate() {
             if (logsUpdateInterval) clearInterval(logsUpdateInterval);
+            // Only start auto-update if backend is online
+            if (!backendOnline) {
+                return;
+            }
             logsUpdateInterval = setInterval(() => {
-                if (logsAutoUpdate && !logsPaused) loadLogs();
+                if (logsAutoUpdate && !logsPaused && backendOnline) {
+                    loadLogs();
+                }
             }, 2000);
         }
 

@@ -1175,6 +1175,12 @@
                 container.innerHTML = '';
 
                 allSources.forEach(source => {
+                    // Skip sources without a valid name
+                    if (!source || !source.name || typeof source.name !== 'string') {
+                        console.warn('Skipping source with invalid name:', source);
+                        return;
+                    }
+                    
                     const btn = document.createElement('button');
                     btn.className = 'source-btn active';
                     btn.dataset.sourceId = source.id;
@@ -1345,6 +1351,12 @@
 
         // Map source names to API endpoint names
         function getSourceApiName(sourceName) {
+            // Validate input - handle undefined, null, or non-string values
+            if (!sourceName || typeof sourceName !== 'string') {
+                console.warn('getSourceApiName: Invalid sourceName provided', sourceName);
+                return 'unknown'; // Return a safe default
+            }
+            
             const nameLower = sourceName.toLowerCase();
             // Map common source names to API endpoint names
             if (nameLower.includes('sexyfriendstoronto') || nameLower.includes('sft')) {
@@ -1376,7 +1388,20 @@
                 // Scrape each selected source
                 for (const btn of selectedSourceButtons) {
                     const sourceName = btn.dataset.sourceName;
+                    
+                    // Skip sources without a valid name
+                    if (!sourceName || sourceName === 'undefined' || sourceName === 'null') {
+                        errors.push({ source: sourceName || 'Unknown', error: 'Source name is missing or invalid' });
+                        continue;
+                    }
+                    
                     const apiName = getSourceApiName(sourceName);
+                    
+                    // Skip if API name couldn't be determined
+                    if (!apiName || apiName === 'unknown') {
+                        errors.push({ source: sourceName, error: 'Could not determine API endpoint name' });
+                        continue;
+                    }
                     
                     try {
                         const response = await fetch(`${API_BASE}/api/scrape/${apiName}`, { method: 'POST' });

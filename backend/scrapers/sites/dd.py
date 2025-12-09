@@ -177,8 +177,21 @@ class DDScraper(BaseScraper):
     async def _ensure_crawler(self):
         """Ensure crawler is initialized."""
         if not self._crawler_initialized:
-            await self.crawler._init_browser()
-            self._crawler_initialized = True
+            try:
+                await self.crawler._init_browser()
+                # Verify browser is actually working
+                if not await self.crawler._check_context_valid():
+                    raise Exception("Browser initialized but context is invalid")
+                self._crawler_initialized = True
+            except Exception as e:
+                self.logger.error(f"Failed to initialize crawler: {e}")
+                self._crawler_initialized = False
+                # Ensure cleanup of any partially allocated resources
+                try:
+                    await self.crawler.close()
+                except Exception as cleanup_error:
+                    self.logger.warning(f"Error during cleanup after failed initialization: {cleanup_error}")
+                raise
 
     async def scrape_schedule(self) -> List[ScheduleItem]:
         """
@@ -335,9 +348,13 @@ class DDScraper(BaseScraper):
         try:
             return await super().run()
         finally:
-            # Cleanup crawler resources
-            if self._crawler_initialized:
+            # Always attempt cleanup, even if initialization failed
+            # This ensures resources are freed even if _ensure_crawler() failed
+            try:
                 await self.crawler.close()
+            except Exception as e:
+                self.logger.warning(f"Error during crawler cleanup: {e}")
+            finally:
                 self._crawler_initialized = False
 
     def _parse_profile(self, soup: BeautifulSoup) -> Dict[str, Any]:

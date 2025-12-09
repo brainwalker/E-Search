@@ -298,9 +298,21 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - `chore:` - Maintenance tasks
 - `style:` - Code style changes
 
-## Delete All Data Behavior
+## ⚠️ CRITICAL: Never Delete Sources, Locations, or Tiers
 
-The "Delete All Data" button (`/api/sources/{source_id}/data`) behavior:
+**NEVER DELETE RECORDS FROM THESE TABLES:**
+- `sources` - Deleting a source will cascade delete all associated tiers and locations
+- `locations` - These are configuration data, not scraped data
+- `tiers` - These are configuration data with rate information
+
+**Why this matters:**
+- Sources have foreign key relationships to tiers and locations
+- Deleting a source will permanently remove all tier rate information
+- Locations and tiers are configuration data that should persist even when listings are deleted
+- If accidentally deleted, you must manually reseed using seed scripts
+
+**Use "Delete All Data" instead:**
+The "Delete All Data" button (`/api/sources/{source_id}/data`) is safe to use:
 
 **Deletes:**
 - All listings for the source
@@ -309,9 +321,15 @@ The "Delete All Data" button (`/api/sources/{source_id}/data`) behavior:
 **Preserves:**
 - The source itself
 - All locations
+- All tiers
 - All tags
 
-This allows clearing data and re-scraping without losing configuration.
+This allows clearing scraped data and re-scraping without losing configuration.
+
+**If you accidentally delete a source:**
+1. Recreate the source using the seed script or manually
+2. Reseed tiers using `backend/scripts/seed_dd_tiers.py` (for DD) or `seed_tiers.py` (for other sources)
+3. Reseed locations using `backend/scripts/seed_locations.py` or `seed_dd_locations.py`
 
 ## Best Practices
 
@@ -344,6 +362,16 @@ This allows clearing data and re-scraping without losing configuration.
 cd backend
 python3 -m scripts.seed_locations
 # Or manually add to database
+```
+
+### Reseed Tiers (if accidentally deleted)
+```bash
+cd backend
+# For DD (DiscreetDolls)
+python3 -m scripts.seed_dd_tiers
+
+# For other sources
+python3 -m scripts.seed_tiers
 ```
 
 ### Run Database Migration
