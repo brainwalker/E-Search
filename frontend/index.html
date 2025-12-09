@@ -1234,12 +1234,13 @@
                 allSources.forEach(source => {
                     const btn = document.createElement('button');
 
-                    // Only active if implemented AND in database
-                    const isAvailable = source.implemented && source.inDatabase;
+                    // Available if implemented (even if not in database yet - will be added on first scrape)
+                    const isAvailable = source.implemented;
                     btn.className = isAvailable ? 'source-btn active' : 'source-btn disabled';
                     btn.dataset.sourceId = source.id || '';
                     btn.dataset.sourceKey = source.key;
-                    btn.title = source.fullName + (isAvailable ? '' : ' (not implemented)');
+                    btn.dataset.implemented = source.implemented;
+                    btn.title = source.fullName + (isAvailable ? '' : ' (not implemented yet)');
 
                     // Add name and status dot
                     btn.innerHTML = `${source.name}<span class="status-dot ${source.implemented ? 'implemented' : 'pending'}"></span>`;
@@ -1284,9 +1285,10 @@
             try {
                 const params = new URLSearchParams();
 
-                // Sources
+                // Sources - filter out empty IDs (sources not yet in database)
                 const selectedSources = Array.from(document.querySelectorAll('#sourcesButtons .source-btn.active'))
-                    .map(btn => btn.dataset.sourceId);
+                    .map(btn => btn.dataset.sourceId)
+                    .filter(id => id && id !== '');
                 if (selectedSources.length > 0) params.append('source_ids', selectedSources.join(','));
 
                 // Days
