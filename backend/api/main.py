@@ -228,28 +228,17 @@ async def list_scrapers():
 
 @app.post("/api/scrape-all")
 async def scrape_all_sources(
-    use_new_scraper: bool = Query(False, description="Use new Crawlee-based scrapers"),
+    use_new_scraper: bool = Query(True, description="Use new Crawlee-based scrapers"),
     db: Session = Depends(get_db)
 ):
     """Trigger scraping for all active sources"""
-    if use_new_scraper:
-        # Use new Crawlee-based scraper manager
-        manager = ScraperManager(db)
-        results = await manager.scrape_all()
-        return {
-            "results": [r.to_dict() for r in results.values()],
-            "summary": manager.get_results_summary()
-        }
-    else:
-        # Use old scrapers (default for now)
-        results = []
-
-        # SexyFriendsToronto
-        scraper = SexyFriendsTorontoScraper(db)
-        result = await scraper.scrape_and_save()
-        results.append(result)
-
-        return {"results": results}
+    # Use new Crawlee-based scraper manager (default)
+    manager = ScraperManager(db)
+    results = await manager.scrape_all()
+    return {
+        "results": [r.to_dict() for r in results.values()],
+        "summary": manager.get_results_summary()
+    }
 
 
 def get_tier_rates_cache(db: Session) -> dict:
