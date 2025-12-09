@@ -558,19 +558,27 @@ class SexyFriendsTorontoScraper:
                             profile_data['bust_type'] = bust_type
         
         # Infer bust type from text if not explicitly stated
-        if 'bust' in profile_data and 'bust_type' not in profile_data:
-            # Check for "Enhancements none" or "Enhancements: none"
-            enhancements_match = re.search(r'Enhancements?[:\s]+(none|yes|no|natural|enhanced)', text, re.IGNORECASE)
-            if enhancements_match:
-                enh_val = enhancements_match.group(1).lower()
-                if enh_val in ['none', 'no', 'natural']:
+        # Note: Extract bust_type even if bust size wasn't found, as it's useful info
+        if 'bust_type' not in profile_data:
+            # Check for "Enhanced: No", "Enhanced: Yes", "Enhancement: none", etc.
+            # Handle cases like "Enhanced: NoPersonality" (no space after value)
+            # Note: Don't use \b word boundary as it fails when No is followed by letters
+            enhanced_match = re.search(r'Enhanced?[:\s]+(yes|no)', text, re.IGNORECASE)
+            if enhanced_match:
+                enh_val = enhanced_match.group(1).lower()
+                if enh_val == 'no':
                     profile_data['bust_type'] = 'Natural'
-                elif enh_val in ['yes', 'enhanced']:
+                elif enh_val == 'yes':
                     profile_data['bust_type'] = 'Enhanced'
-            elif 'enhanced' in text.lower() or 'Enhanced: Yes' in text:
-                profile_data['bust_type'] = 'Enhanced'
-            elif 'natural' in text.lower() or 'Enhanced: No' in text or 'Enhanced: no' in text:
-                profile_data['bust_type'] = 'Natural'
+            else:
+                # Check for "Enhancements none" or "Enhancements: none/natural/enhanced"
+                enhancements_match = re.search(r'Enhancements?[:\s]+(none|yes|no|natural|enhanced)', text, re.IGNORECASE)
+                if enhancements_match:
+                    enh_val = enhancements_match.group(1).lower()
+                    if enh_val in ['none', 'no', 'natural']:
+                        profile_data['bust_type'] = 'Natural'
+                    elif enh_val in ['yes', 'enhanced']:
+                        profile_data['bust_type'] = 'Enhanced'
 
         # Extract height (formats: 5'9, 5'9", 5 ft 9, 5"7, 5,4, etc.)
         # Handles many variations:

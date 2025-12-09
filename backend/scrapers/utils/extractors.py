@@ -311,6 +311,28 @@ def extract_bust(text: str) -> Tuple[Optional[str], Optional[str], Optional[str]
                 if bust_from_meas:
                     bust_size = bust_from_meas.group(1).replace(' ', '').upper()
 
+    # If bust_type not found from Bust: line, check for Enhanced: Yes/No pattern
+    if not bust_type:
+        # Check for "Enhanced: No", "Enhanced: Yes" patterns
+        # Handle cases like "Enhanced: NoPersonality" (no space after value)
+        # Note: Don't use \b word boundary as it fails when No is followed by letters
+        enhanced_match = re.search(r'Enhanced?[:\s]+(yes|no)', text, re.IGNORECASE)
+        if enhanced_match:
+            enh_val = enhanced_match.group(1).lower()
+            if enh_val == 'no':
+                bust_type = 'Natural'
+            elif enh_val == 'yes':
+                bust_type = 'Enhanced'
+        else:
+            # Check for "Enhancements none" or "Enhancements: none/natural/enhanced"
+            enhancements_match = re.search(r'Enhancements?[:\s]+(none|yes|no|natural|enhanced)', text, re.IGNORECASE)
+            if enhancements_match:
+                enh_val = enhancements_match.group(1).lower()
+                if enh_val in ['none', 'no', 'natural']:
+                    bust_type = 'Natural'
+                elif enh_val in ['yes', 'enhanced']:
+                    bust_type = 'Enhanced'
+
     return bust_size, bust_type, measurements
 
 
