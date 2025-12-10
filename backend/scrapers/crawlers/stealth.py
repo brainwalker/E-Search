@@ -237,28 +237,41 @@ class StealthCrawler:
                 raise
 
     async def _cleanup(self):
-        """Clean up browser resources."""
+        """Clean up browser resources with timeouts to prevent hanging."""
+        cleanup_timeout = 2.0  # 2 second timeout per cleanup operation
+        
         if self._page:
             try:
-                await self._page.close()
+                await asyncio.wait_for(self._page.close(), timeout=cleanup_timeout)
+            except asyncio.TimeoutError:
+                logger.warning("Page close timed out, forcing cleanup")
             except Exception as e:
                 logger.debug(f"Error closing page: {e}")
             self._page = None
+        
         if self._context:
             try:
-                await self._context.close()
+                await asyncio.wait_for(self._context.close(), timeout=cleanup_timeout)
+            except asyncio.TimeoutError:
+                logger.warning("Context close timed out, forcing cleanup")
             except Exception as e:
                 logger.warning(f"Error closing context: {e}")
             self._context = None
+        
         if self._browser:
             try:
-                await self._browser.close()
+                await asyncio.wait_for(self._browser.close(), timeout=cleanup_timeout)
+            except asyncio.TimeoutError:
+                logger.warning("Browser close timed out, forcing cleanup")
             except Exception as e:
                 logger.warning(f"Error closing browser: {e}")
             self._browser = None
+        
         if self._playwright:
             try:
-                await self._playwright.stop()
+                await asyncio.wait_for(self._playwright.stop(), timeout=cleanup_timeout)
+            except asyncio.TimeoutError:
+                logger.warning("Playwright stop timed out, forcing cleanup")
             except Exception as e:
                 logger.warning(f"Error stopping playwright: {e}")
             self._playwright = None

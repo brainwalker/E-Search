@@ -8,8 +8,9 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 import json
 import logging
+import asyncio
 
-from api.database import get_db, init_db, Listing, Schedule, Source, Tag, Location, Tier, listing_tags
+from api.database import get_db, init_db, Listing, Schedule, Source, Tag, Location, Tier, listing_tags, engine
 from api.scraper import SexyFriendsTorontoScraper
 from api.config import settings
 from scrapers.manager import ScraperManager, SCRAPER_REGISTRY
@@ -20,16 +21,85 @@ from pydantic import BaseModel
 settings.log_dir.mkdir(exist_ok=True)
 
 # Configure logging using settings
+# Use basicConfig but prevent duplicate logs by configuring child loggers
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper()),
     format=settings.log_format,
     handlers=[
         logging.FileHandler(settings.log_file, encoding='utf-8'),
         logging.StreamHandler()
-    ]
+    ],
+    force=True  # Override any existing configuration
 )
 
+# Prevent scraper loggers from propagating to root to avoid duplicate logs
+# They will still use root logger's handlers via propagation, but we prevent double-handling
+scraper_logger = logging.getLogger('scraper')
+scraper_logger.propagate = False
+# Add handlers directly to scraper logger so messages appear once
+# Only add handlers if not already present (prevents duplicates on module reload)
+if not scraper_logger.handlers:
+    scraper_logger.addHandler(logging.FileHandler(settings.log_file, encoding='utf-8'))
+    scraper_logger.addHandler(logging.StreamHandler())
+scraper_logger.setLevel(getattr(logging, settings.log_level.upper()))
+
 logger = logging.getLogger(__name__)
+
+
+# Filter to suppress noisy polling endpoint access logs
+class PollingEndpointFilter(logging.Filter):
+    # Endpoints that poll frequently and clutter logs
+    SUPPRESSED_ENDPOINTS = ['/db/logs', '/api/sources']
+    
+    def filter(self, record):
+        try:
+            msg = record.getMessage()
+        except Exception:
+            msg = str(record.msg) % (record.args if hasattr(record, 'args') and record.args else ())
+        # Suppress requests to polling endpoints
+        for endpoint in self.SUPPRESSED_ENDPOINTS:
+            if endpoint in msg:
+                return False
+        return True
+
+# Apply filter to uvicorn access logger at module load time
+uvicorn_access_logger = logging.getLogger("uvicorn.access")
+uvicorn_access_logger.addFilter(PollingEndpointFilter())
+
+
+# Global shutdown event
+shutdown_event = asyncio.Event()
+
+
+async def cleanup_resources():
+    """Clean up all resources on shutdown."""
+    logger.info("Cleaning up resources...")
+    
+    # Close database connections with timeout
+    try:
+        logger.info("Closing database connections...")
+        # Run dispose in executor since it's synchronous
+        await asyncio.wait_for(
+            asyncio.get_event_loop().run_in_executor(
+                None, 
+                lambda: engine.dispose(close=True)
+            ),
+            timeout=2.0
+        )
+        logger.info("Database connections closed")
+    except asyncio.TimeoutError:
+        logger.warning("Database cleanup timed out, forcing close")
+        # Force synchronous dispose if timeout
+        try:
+            engine.dispose(close=True)
+        except Exception:
+            pass
+    except Exception as e:
+        logger.warning(f"Error closing database connections: {e}")
+    
+    # Give a small delay for any pending operations
+    await asyncio.sleep(0.1)
+    logger.info("Resource cleanup complete")
 
 
 @asynccontextmanager
@@ -52,7 +122,19 @@ async def lifespan(app: FastAPI):
     yield  # Application runs here
     
     # Shutdown
+    logger.info("=" * 60)
     logger.info("E-Search Backend Shutting Down")
+    logger.info("=" * 60)
+    
+    # Clean up resources with timeout
+    try:
+        await asyncio.wait_for(cleanup_resources(), timeout=5.0)
+    except asyncio.TimeoutError:
+        logger.warning("Shutdown cleanup timed out, forcing exit")
+    except Exception as e:
+        logger.error(f"Error during shutdown cleanup: {e}")
+    
+    logger.info("Shutdown complete")
 
 
 app = FastAPI(
@@ -675,6 +757,74 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
                     updated_count += 1
                     logging.debug(f"  Updated {field}: {old_value} -> {new_value}")
         
+        # Update schedules if available in profile_data
+        schedules_updated = 0
+        logging.info(f"Checking for schedules in profile_data: {'schedules' in profile_data}")
+        if 'schedules' in profile_data:
+            logging.info(f"Found schedules in profile_data: {len(profile_data.get('schedules', []))} schedule(s)")
+        if 'schedules' in profile_data and profile_data['schedules']:
+            
+            for schedule_data in profile_data['schedules']:
+                # Match location
+                location_str = schedule_data.get('location', 'Unknown')
+                location = db.query(Location).filter(
+                    Location.source_id == source.id,
+                    Location.town.ilike(f"%{location_str.split(',')[0] if ',' in location_str else location_str}%")
+                ).first()
+
+                if not location:
+                    # Use default location
+                    location = db.query(Location).filter(
+                        Location.source_id == source.id,
+                        Location.is_default == True
+                    ).first()
+
+                location_id = location.id if location else None
+                day_of_week = schedule_data.get('day_of_week')
+                
+                # Calculate date from day of week (same logic as base scraper)
+                today = datetime.now()
+                day_map = {
+                    'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3,
+                    'Friday': 4, 'Saturday': 5, 'Sunday': 6
+                }
+                target_day = day_map.get(day_of_week) if day_of_week else None
+                schedule_date = None
+                if target_day is not None:
+                    current_day = today.weekday()
+                    days_ahead = target_day - current_day
+                    if days_ahead <= 0:
+                        days_ahead += 7
+                    schedule_date = (today + timedelta(days=days_ahead)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+                # Check for existing schedule
+                existing_schedule = db.query(Schedule).filter_by(
+                    listing_id=listing.id,
+                    day_of_week=day_of_week,
+                    location_id=location_id
+                ).first()
+
+                if existing_schedule:
+                    existing_schedule.date = schedule_date
+                    existing_schedule.start_time = schedule_data.get('start_time')
+                    existing_schedule.end_time = schedule_data.get('end_time')
+                    existing_schedule.is_expired = False
+                    schedules_updated += 1
+                else:
+                    new_schedule = Schedule(
+                        listing_id=listing.id,
+                        day_of_week=day_of_week,
+                        date=schedule_date,
+                        location_id=location_id,
+                        start_time=schedule_data.get('start_time'),
+                        end_time=schedule_data.get('end_time'),
+                    )
+                    db.add(new_schedule)
+                    schedules_updated += 1
+            
+            if schedules_updated > 0:
+                logging.info(f"✅ Updated {schedules_updated} schedule(s) for listing {listing_id}")
+
         listing.updated_at = datetime.now()
         db.commit()
         db.refresh(listing)
@@ -764,4 +914,14 @@ async def delete_source_data(source_id: int, db: Session = Depends(get_db)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    # Configure uvicorn for faster shutdown
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=8000, 
+        access_log=True,
+        log_config=None,  # Use default but our filter will handle it
+        timeout_keep_alive=5,  # Reduce keep-alive timeout
+        timeout_graceful_shutdown=5.0,  # Graceful shutdown timeout (5 seconds)
+    )

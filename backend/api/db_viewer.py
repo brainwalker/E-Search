@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect, text
 from typing import Optional, Set
-from api.database import get_db, engine
+from api.database import get_db, engine, Listing, Location, Tier
 from api.config import settings
 import logging
 from pathlib import Path
@@ -278,3 +278,291 @@ async def get_backend_status():
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
+
+
+@router.get("/table/{table_name}/row/{row_id}")
+async def get_table_row(
+    table_name: str,
+    row_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get a single row from a table"""
+    allowed_tables = {'listings', 'locations', 'tiers'}
+    if table_name not in allowed_tables:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Getting rows is only allowed for: {', '.join(sorted(allowed_tables))}. Requested: '{table_name}'"
+        )
+    
+    table_name = validate_table_name(table_name)
+    
+    from api.database import Listing, Location, Tier
+    
+    if table_name == 'listings':
+        row = db.query(Listing).filter(Listing.id == row_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Listing with id {row_id} not found")
+        return {
+            'id': row.id,
+            'name': row.name,
+            'tier': row.tier,
+            'age': row.age,
+            'nationality': row.nationality,
+            'ethnicity': row.ethnicity,
+            'height': row.height,
+            'weight': row.weight,
+            'measurements': row.measurements,
+            'bust': row.bust,
+            'bust_type': row.bust_type,
+            'eye_color': row.eye_color,
+            'hair_color': row.hair_color,
+            'service_type': row.service_type,
+            'images': row.images,
+            'is_active': row.is_active,
+            'is_expired': row.is_expired,
+            'source_id': row.source_id,
+            'profile_url': row.profile_url,
+        }
+    elif table_name == 'locations':
+        row = db.query(Location).filter(Location.id == row_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Location with id {row_id} not found")
+        return {
+            'id': row.id,
+            'town': row.town,
+            'location': row.location,
+            'address': row.address,
+            'notes': row.notes,
+            'source_id': row.source_id,
+            'is_default': row.is_default,
+        }
+    elif table_name == 'tiers':
+        row = db.query(Tier).filter(Tier.id == row_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Tier with id {row_id} not found")
+        return {
+            'id': row.id,
+            'tier': row.tier,
+            'star': row.star,
+            'source_id': row.source_id,
+            'incall_30min': row.incall_30min,
+            'incall_45min': row.incall_45min,
+            'incall_1hr': row.incall_1hr,
+            'outcall_per_hr': row.outcall_per_hr,
+        }
+
+
+@router.put("/table/{table_name}/row/{row_id}")
+async def update_table_row(
+    table_name: str,
+    row_id: int,
+    updates: dict,
+    db: Session = Depends(get_db)
+):
+    """Update a row in a table"""
+    # Only allow updates to specific tables
+    allowed_tables = {'listings', 'locations', 'tiers'}
+    if table_name not in allowed_tables:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Editing is only allowed for: {', '.join(sorted(allowed_tables))}. Requested: '{table_name}'"
+        )
+    
+    # Validate table name
+    table_name = validate_table_name(table_name)
+    
+    # Import models
+    from api.database import Listing, Location, Tier
+    
+    # Handle different table types
+    if table_name == 'listings':
+        row = db.query(Listing).filter(Listing.id == row_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Listing with id {row_id} not found")
+        
+        allowed_fields = {
+            'name', 'profile_url', 'tier', 'age', 'nationality', 'ethnicity',
+            'height', 'weight', 'measurements', 'bust', 'bust_type',
+            'eye_color', 'hair_color', 'service_type', 'images',
+            'is_active', 'is_expired', 'source_id'
+        }
+        
+        # Update fields
+        updated_fields = []
+        for field, value in updates.items():
+            if field not in allowed_fields:
+                continue
+            
+            if hasattr(row, field):
+                # Handle special cases
+                if field == 'images' and isinstance(value, list):
+                    import json
+                    value = json.dumps(value) if value else None
+                elif field in ('age', 'source_id') and value is not None:
+                    try:
+                        value = int(value)
+                    except (ValueError, TypeError):
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Invalid value for {field}: {value}. Must be an integer."
+                        )
+                elif field in ('is_active', 'is_expired') and value is not None:
+                    value = bool(value)
+                
+                setattr(row, field, value)
+                updated_fields.append(field)
+        
+        # Update updated_at timestamp (only for listings)
+        if table_name == 'listings' and updated_fields:
+            row.updated_at = datetime.now()
+        
+        # Build result dict
+        result = {
+            'id': row.id,
+            'name': row.name,
+            'tier': row.tier,
+            'age': row.age,
+            'nationality': row.nationality,
+            'ethnicity': row.ethnicity,
+            'height': row.height,
+            'weight': row.weight,
+            'measurements': row.measurements,
+            'bust': row.bust,
+            'bust_type': row.bust_type,
+            'eye_color': row.eye_color,
+            'hair_color': row.hair_color,
+            'service_type': row.service_type,
+            'images': row.images,
+            'is_active': row.is_active,
+            'is_expired': row.is_expired,
+            'source_id': row.source_id,
+            'profile_url': row.profile_url,
+            'updated_at': row.updated_at.isoformat() if row.updated_at else None,
+        }
+        
+    elif table_name == 'locations':
+        row = db.query(Location).filter(Location.id == row_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Location with id {row_id} not found")
+        
+        allowed_fields = {
+            'town', 'location', 'address', 'notes', 'source_id', 'is_default'
+        }
+        
+        updated_fields = []
+        for field, value in updates.items():
+            if field not in allowed_fields:
+                continue
+            
+            if hasattr(row, field):
+                # Handle special cases
+                if field == 'source_id' and value is not None:
+                    try:
+                        value = int(value)
+                    except (ValueError, TypeError):
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Invalid value for {field}: {value}. Must be an integer."
+                        )
+                elif field == 'is_default' and value is not None:
+                    value = bool(value)
+                elif value == '':
+                    value = None  # Convert empty strings to None
+                
+                setattr(row, field, value)
+                updated_fields.append(field)
+        
+        if not updated_fields:
+            raise HTTPException(
+                status_code=400,
+                detail="No valid fields to update. Allowed fields: " + ", ".join(sorted(allowed_fields))
+            )
+        
+        result = {
+            'id': row.id,
+            'town': row.town,
+            'location': row.location,
+            'address': row.address,
+            'notes': row.notes,
+            'source_id': row.source_id,
+            'is_default': row.is_default,
+            'created_at': row.created_at.isoformat() if row.created_at else None,
+        }
+        
+    elif table_name == 'tiers':
+        row = db.query(Tier).filter(Tier.id == row_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Tier with id {row_id} not found")
+        
+        allowed_fields = {
+            'tier', 'star', 'source_id',
+            'incall_30min', 'incall_45min', 'incall_1hr', 'outcall_per_hr'
+        }
+        
+        updated_fields = []
+        for field, value in updates.items():
+            if field not in allowed_fields:
+                continue
+            
+            if hasattr(row, field):
+                # Handle special cases
+                if field == 'source_id' and value is not None:
+                    try:
+                        value = int(value)
+                    except (ValueError, TypeError):
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Invalid value for {field}: {value}. Must be an integer."
+                        )
+                elif field == 'star' and value is not None:
+                    try:
+                        value = int(value)
+                    except (ValueError, TypeError):
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Invalid value for {field}: {value}. Must be an integer."
+                        )
+                elif value == '':
+                    value = None  # Convert empty strings to None
+                
+                setattr(row, field, value)
+                updated_fields.append(field)
+        
+        if not updated_fields:
+            raise HTTPException(
+                status_code=400,
+                detail="No valid fields to update. Allowed fields: " + ", ".join(sorted(allowed_fields))
+            )
+        
+        result = {
+            'id': row.id,
+            'tier': row.tier,
+            'star': row.star,
+            'source_id': row.source_id,
+            'incall_30min': row.incall_30min,
+            'incall_45min': row.incall_45min,
+            'incall_1hr': row.incall_1hr,
+            'outcall_per_hr': row.outcall_per_hr,
+            'created_at': row.created_at.isoformat() if row.created_at else None,
+        }
+    
+    if not updated_fields:
+        raise HTTPException(
+            status_code=400,
+            detail="No valid fields to update"
+        )
+    
+    try:
+        db.commit()
+        db.refresh(row)
+        
+        return {
+            "success": True,
+            "message": f"Updated {len(updated_fields)} field(s): {', '.join(updated_fields)}",
+            "updated_fields": updated_fields,
+            "row": result
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating {table_name} {row_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating row: {str(e)}")

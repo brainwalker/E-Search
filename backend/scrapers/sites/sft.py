@@ -7,7 +7,7 @@ It serves as a reference implementation for other static HTML scrapers.
 
 import re
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from bs4 import BeautifulSoup
 
 from ..base import BaseScraper, ScheduleItem, ScrapedListing
@@ -36,6 +36,81 @@ from ..utils.extractors import (
     extract_images,
     extract_tags,
 )
+
+
+def parse_sft_location(location_str: str) -> Tuple[str, str]:
+    """
+    Parse SFT location string into town and location parts.
+    
+    Examples:
+        "MIDTOWN YONGE & EGLINTON" -> ("Midtown", "Yonge & Eglinton")
+        "DOWNTOWN UNIVERSITY & QUEEN" -> ("Downtown", "University & Queen")
+        "ETOBICOKE HWY 427 & BURNHAMTHORPE RD (AIRPORT)" -> ("Etobicoke", "HWY 427 & Burnhamthorpe Rd (Airport)")
+        "OAKVILLE  NEAR TRAFALGER & UPPERMIDDLE RD E" -> ("Oakville", "Near Trafalger & Uppermiddle Rd E")
+        "VAUGHAN" -> ("Vaughan", "unknown")
+    
+    Returns:
+        Tuple of (town, location)
+    """
+    if not location_str:
+        return ("Unknown", "unknown")
+    
+    location_str = location_str.strip()
+    
+    # Known SFT town names (case-insensitive matching)
+    known_towns = {
+        'vaughan', 'midtown', 'downtown', 'etobicoke', 'oakville',
+        'mississauga', 'brampton', 'north york', 'scarborough',
+        'markham', 'richmond hill', 'ajax', 'pickering', 'whitby'
+    }
+    
+    # Try to find a known town at the start of the string
+    location_lower = location_str.lower().strip()
+    
+    # Debug: log what we're trying to match
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.debug(f"Parsing SFT location: '{location_str}' (lowercase: '{location_lower}')")
+    
+    for town in sorted(known_towns, key=len, reverse=True):  # Check longer names first
+        # Check if the location string starts with the town name (with optional space after)
+        if location_lower.startswith(town):
+            logger.debug(f"Matched town '{town}' in '{location_str}'")
+            # Extract location part (everything after the town name)
+            # Use the original case string but find the position using lowercase
+            town_end_pos = len(town)
+            # Skip any spaces after the town name
+            while town_end_pos < len(location_str) and location_str[town_end_pos] == ' ':
+                town_end_pos += 1
+            location_part = location_str[town_end_pos:].strip()
+            
+            # Normalize town name (capitalize first letter of each word)
+            town_normalized = ' '.join(word.capitalize() for word in town.split())
+            
+            # Normalize location part (remove extra spaces, capitalize properly)
+            if location_part:
+                # Clean up extra spaces
+                location_part = ' '.join(location_part.split())
+                # Capitalize first letter of each word, but preserve acronyms and special cases
+                words = location_part.split()
+                normalized_words = []
+                for word in words:
+                    # Preserve acronyms (all caps) and common abbreviations
+                    if word.isupper() and len(word) <= 5:
+                        normalized_words.append(word)
+                    else:
+                        normalized_words.append(word.capitalize())
+                location_normalized = ' '.join(normalized_words)
+            else:
+                location_normalized = "unknown"
+            
+            logger.debug(f"Parsed result: town='{town_normalized}', location='{location_normalized}'")
+            return (town_normalized, location_normalized)
+    
+    # If no known town found, treat whole string as town
+    logger.debug(f"No town matched for '{location_str}', using fallback")
+    town_normalized = ' '.join(word.capitalize() for word in location_str.split())
+    return (town_normalized, "unknown")
 
 
 class SFTScraper(BaseScraper):
@@ -78,6 +153,13 @@ class SFTScraper(BaseScraper):
             # Location headers (h5)
             if element.name == 'h5':
                 current_location = text.replace('INCALL', '').strip()
+                # Skip OUTCALL locations
+                if current_location.upper() == 'OUTCALL' or 'OUTCALL' in current_location.upper():
+                    self.logger.debug(f"Skipping OUTCALL location: '{current_location}'")
+                    current_location = None  # Set to None to skip listings under this location
+                    continue
+                # Log location extraction for debugging
+                self.logger.debug(f"Found location header: '{current_location}'")
 
             # Day headers (h6)
             elif element.name == 'h6':
@@ -85,6 +167,10 @@ class SFTScraper(BaseScraper):
 
             # Listings (anchor tags)
             elif element.name == 'a' and current_day and current_location:
+                # Skip if location is OUTCALL (shouldn't happen due to filtering above, but double-check)
+                if current_location and ('OUTCALL' in current_location.upper() or current_location.upper() == 'OUTCALL'):
+                    continue
+                
                 profile_slug = element.get('href', '').strip().strip('/')
 
                 if not profile_slug or profile_slug.startswith('http'):
@@ -106,6 +192,11 @@ class SFTScraper(BaseScraper):
                 if len(name) < 2:
                     continue
 
+                # Log if location is missing
+                if not current_location or current_location.strip() == '':
+                    self.logger.warning(f"Missing location for listing '{name}' on {current_day}")
+                    current_location = 'Unknown'
+                
                 items.append(ScheduleItem(
                     name=normalize_name(name),
                     profile_url=profile_slug,

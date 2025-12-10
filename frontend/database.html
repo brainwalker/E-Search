@@ -898,6 +898,15 @@
         </div>
     </div>
 
+    <!-- Edit Listing Modal -->
+    <div class="modal" id="editModal" style="z-index: 2000;">
+        <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <span class="modal-close" onclick="closeEditModal()">&times;</span>
+            <h3 style="margin-bottom: 16px; color: var(--text-primary);">Edit Listing</h3>
+            <div id="editModalContent"></div>
+        </div>
+    </div>
+
     <!-- Extraction Debug Modal -->
     <div class="modal" id="extractionModal" style="z-index: 2000;">
         <div class="modal-content" style="max-width: 900px; max-height: 85vh; overflow: auto;">
@@ -1259,7 +1268,7 @@
             } else {
                 html += '<div class="table-wrapper"><table><thead><tr>';
                 
-                if (data.table === 'listings') {
+                if (data.table === 'listings' || data.table === 'locations' || data.table === 'tiers') {
                     html += `<th style="min-width: 130px;">Actions</th>`;
                 }
                 
@@ -1275,7 +1284,18 @@
                         const listingId = row['id'];
                         html += `<td>
                             <button class="btn-success btn-small" onclick="refreshSingleListing(${listingId})">Refresh</button>
+                            <button class="btn-primary btn-small" style="margin-left: 4px;" onclick="editSingleRow('listings', ${listingId})">Edit</button>
                             <button class="btn-danger btn-small" style="margin-left: 4px;" onclick="deleteSingleListing(${listingId})">Delete</button>
+                        </td>`;
+                    } else if (data.table === 'locations') {
+                        const locationId = row['id'];
+                        html += `<td>
+                            <button class="btn-primary btn-small" onclick="editSingleRow('locations', ${locationId})">Edit</button>
+                        </td>`;
+                    } else if (data.table === 'tiers') {
+                        const tierId = row['id'];
+                        html += `<td>
+                            <button class="btn-primary btn-small" onclick="editSingleRow('tiers', ${tierId})">Edit</button>
                         </td>`;
                     }
 
@@ -1398,6 +1418,11 @@
 
         document.getElementById('jsonModal').addEventListener('click', function(e) {
             if (e.target === this) closeModal();
+        });
+
+        // Edit Modal click-outside-to-close
+        document.getElementById('editModal').addEventListener('click', function(e) {
+            if (e.target === this) closeEditModal();
         });
 
         document.getElementById('extractionModal').addEventListener('click', function(e) {
@@ -1861,6 +1886,196 @@
                     btn.style.background = '';
                 }, 2000);
             }
+        }
+
+        async function editSingleRow(tableName, rowId) {
+            try {
+                // Fetch the row data
+                const res = await fetch(`${API_BASE}/db/table/${tableName}/row/${rowId}`);
+                if (!res.ok) throw new Error('Failed to load row');
+                const row = await res.json();
+                
+                // Define fields based on table type
+                let fields = [];
+                let title = '';
+                
+                if (tableName === 'listings') {
+                    title = 'Edit Listing';
+                    fields = [
+                        { key: 'name', label: 'Name', type: 'text' },
+                        { key: 'tier', label: 'Tier', type: 'text' },
+                        { key: 'age', label: 'Age', type: 'number' },
+                        { key: 'nationality', label: 'Nationality', type: 'text' },
+                        { key: 'ethnicity', label: 'Ethnicity', type: 'text' },
+                        { key: 'height', label: 'Height', type: 'text' },
+                        { key: 'weight', label: 'Weight', type: 'text' },
+                        { key: 'measurements', label: 'Measurements', type: 'text' },
+                        { key: 'bust', label: 'Bust', type: 'text' },
+                        { key: 'bust_type', label: 'Bust Type', type: 'text' },
+                        { key: 'eye_color', label: 'Eye Color', type: 'text' },
+                        { key: 'hair_color', label: 'Hair Color', type: 'text' },
+                        { key: 'service_type', label: 'Service Type', type: 'text' },
+                        { key: 'profile_url', label: 'Profile URL', type: 'text' },
+                        { key: 'images', label: 'Images (JSON array)', type: 'textarea' },
+                        { key: 'is_active', label: 'Is Active', type: 'checkbox' },
+                        { key: 'is_expired', label: 'Is Expired', type: 'checkbox' },
+                        { key: 'source_id', label: 'Source ID', type: 'number' },
+                    ];
+                } else if (tableName === 'locations') {
+                    title = 'Edit Location';
+                    fields = [
+                        { key: 'town', label: 'Town', type: 'text' },
+                        { key: 'location', label: 'Location', type: 'text' },
+                        { key: 'address', label: 'Address', type: 'text' },
+                        { key: 'notes', label: 'Notes', type: 'textarea' },
+                        { key: 'source_id', label: 'Source ID', type: 'number' },
+                        { key: 'is_default', label: 'Is Default', type: 'checkbox' },
+                    ];
+                } else if (tableName === 'tiers') {
+                    title = 'Edit Tier';
+                    fields = [
+                        { key: 'tier', label: 'Tier', type: 'text' },
+                        { key: 'star', label: 'Star', type: 'number' },
+                        { key: 'source_id', label: 'Source ID', type: 'number' },
+                        { key: 'incall_30min', label: 'Incall 30min', type: 'text' },
+                        { key: 'incall_45min', label: 'Incall 45min', type: 'text' },
+                        { key: 'incall_1hr', label: 'Incall 1hr', type: 'text' },
+                        { key: 'outcall_per_hr', label: 'Outcall per hr', type: 'text' },
+                    ];
+                } else {
+                    throw new Error(`Unknown table: ${tableName}`);
+                }
+                
+                let html = `<form id="editRowForm" onsubmit="saveRowEdit(event, '${tableName}', ${rowId})">`;
+                html += `<h3 style="margin-bottom: 16px; color: var(--text-primary);">${title}</h3>`;
+                html += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">';
+                
+                fields.forEach(field => {
+                    const value = row[field.key] || '';
+                    html += `<div style="display: flex; flex-direction: column;">`;
+                    html += `<label style="margin-bottom: 4px; font-weight: 500; color: var(--text-secondary);">${field.label}</label>`;
+                    
+                    if (field.type === 'textarea') {
+                        html += `<textarea name="${field.key}" style="padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary); font-family: monospace; min-height: 80px;">${typeof value === 'string' ? value : JSON.stringify(value)}</textarea>`;
+                    } else if (field.type === 'checkbox') {
+                        html += `<input type="checkbox" name="${field.key}" ${value ? 'checked' : ''} style="width: 20px; height: 20px;">`;
+                    } else {
+                        html += `<input type="${field.type}" name="${field.key}" value="${value}" style="padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-primary); color: var(--text-primary);">`;
+                    }
+                    html += `</div>`;
+                });
+                
+                html += '</div>';
+                html += '<div style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">';
+                html += '<button type="button" onclick="closeEditModal()" style="padding: 10px 20px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer;">Cancel</button>';
+                html += '<button type="submit" style="padding: 10px 20px; background: var(--accent-primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">Save Changes</button>';
+                html += '</div>';
+                html += '</form>';
+                
+                document.getElementById('editModalContent').innerHTML = html;
+                document.getElementById('editModal').classList.add('show');
+            } catch (e) {
+                alert(`Error loading row: ${e.message}`);
+            }
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('show');
+        }
+
+        async function saveRowEdit(event, tableName, rowId) {
+            event.preventDefault();
+            
+            const form = event.target;
+            const formData = new FormData(form);
+            const updates = {};
+            
+            // Collect form data based on table type
+            for (const [key, value] of formData.entries()) {
+                if (tableName === 'listings') {
+                    if (key === 'images') {
+                        try {
+                            updates[key] = JSON.parse(value);
+                        } catch {
+                            updates[key] = value || null;
+                        }
+                    } else if (key === 'is_active' || key === 'is_expired') {
+                        updates[key] = formData.has(key);
+                    } else if (key === 'age' || key === 'source_id') {
+                        updates[key] = value ? parseInt(value) : null;
+                    } else {
+                        updates[key] = value || null;
+                    }
+                } else if (tableName === 'locations') {
+                    if (key === 'is_default') {
+                        updates[key] = formData.has(key);
+                    } else if (key === 'source_id') {
+                        updates[key] = value ? parseInt(value) : null;
+                    } else {
+                        updates[key] = value || null;
+                    }
+                } else if (tableName === 'tiers') {
+                    if (key === 'source_id' || key === 'star') {
+                        updates[key] = value ? parseInt(value) : null;
+                    } else {
+                        updates[key] = value || null;
+                    }
+                }
+            }
+            
+            // Handle checkboxes that weren't checked
+            if (tableName === 'listings') {
+                if (!formData.has('is_active')) updates['is_active'] = false;
+                if (!formData.has('is_expired')) updates['is_expired'] = false;
+            } else if (tableName === 'locations') {
+                if (!formData.has('is_default')) updates['is_default'] = false;
+            }
+            
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+            
+            try {
+                const res = await fetch(`${API_BASE}/db/table/${tableName}/row/${rowId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updates)
+                });
+                
+                if (!res.ok) {
+                    const error = await res.json();
+                    throw new Error(error.detail || 'Failed to save changes');
+                }
+                
+                const result = await res.json();
+                
+                submitBtn.textContent = '✅ Saved!';
+                submitBtn.style.background = '#22c55e';
+                
+                // Refresh the table after a short delay
+                setTimeout(() => {
+                    closeEditModal();
+                    if (currentTable === tableName) {
+                        loadTable(tableName, currentPage);
+                    }
+                }, 1000);
+                
+            } catch (e) {
+                submitBtn.textContent = '❌ Failed';
+                submitBtn.style.background = '#ef4444';
+                alert('Error: ' + e.message);
+                setTimeout(() => {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                    submitBtn.style.background = '';
+                }, 2000);
+            }
+        }
+
+        // Keep editSingleListing for backward compatibility
+        async function editSingleListing(listingId) {
+            await editSingleRow('listings', listingId);
         }
 
         async function deleteSingleListing(listingId) {

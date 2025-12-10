@@ -147,6 +147,31 @@ class BaseScraper(ABC):
             started_at=datetime.utcnow()
         )
         self.logger = logging.getLogger(f"scraper.{config.short_name}")
+        # Child loggers of 'scraper' will inherit handlers from parent 'scraper' logger
+        # which is configured in main.py to prevent duplicates
+    
+    def _parse_sft_location_fallback(self, location_str: str) -> tuple:
+        """
+        Fallback SFT location parser if the main one isn't available.
+        Tries to extract town name from common patterns.
+        """
+        location_str = location_str.strip()
+        known_towns = ['Vaughan', 'Midtown', 'Downtown', 'Etobicoke', 'Oakville',
+                      'Mississauga', 'Brampton', 'North York', 'Scarborough',
+                      'Markham', 'Richmond Hill']
+        
+        location_lower = location_str.lower()
+        for town in sorted(known_towns, key=len, reverse=True):
+            if location_lower.startswith(town.lower()):
+                # Extract location part
+                town_end = len(town)
+                while town_end < len(location_str) and location_str[town_end] == ' ':
+                    town_end += 1
+                location_part = location_str[town_end:].strip()
+                return (town, location_part if location_part else "unknown")
+        
+        # No match found
+        return (location_str, "unknown")
 
     @abstractmethod
     async def scrape_schedule(self) -> List[ScheduleItem]:
@@ -301,19 +326,211 @@ class BaseScraper(ABC):
 
         # Handle schedules
         for schedule_data in listing.schedules:
-            # Match location
+            # Skip OUTCALL schedules for all sources
             location_str = schedule_data.get('location', 'Unknown')
-            location = self.db.query(Location).filter(
-                Location.source_id == source.id,
-                Location.town.ilike(f"%{location_str.split(',')[0] if ',' in location_str else location_str}%")
-            ).first()
-
+            if not location_str or location_str.strip() == '':
+                location_str = 'Unknown'
+            
+            # Skip OUTCALL locations
+            if location_str.upper() == 'OUTCALL' or 'OUTCALL' in location_str.upper():
+                self.logger.debug(f"Skipping OUTCALL schedule for listing '{listing.name}'")
+                continue
+            
+            # Normalize location string - strip whitespace and handle different formats
+            location_str = location_str.strip()
+            
+            # Parse location based on source format
+            # For SFT: location format is "TOWN LOCATION_DETAIL" (e.g., "MIDTOWN YONGE & EGLINTON")
+            # For DD: location format is "town, location" (e.g., "Vaughan, unknown")
+            
+            town_name = None
+            location_detail = None
+            
+            if ',' in location_str:
+                # DD format: "town, location"
+                parts = location_str.split(',', 1)
+                town_name = parts[0].strip()
+                location_detail = parts[1].strip() if len(parts) > 1 else "unknown"
+            else:
+                # SFT format: try to parse "TOWN LOCATION_DETAIL"
+                # Always use fallback parser first (more reliable), then try imported one if available
+                town_name, location_detail = self._parse_sft_location_fallback(location_str)
+                
+                # Try to use the imported parser if available (it has better normalization)
+                try:
+                    from ..sites.sft import parse_sft_location
+                    parsed_town, parsed_location = parse_sft_location(location_str)
+                    # Use parsed result if it successfully split the location
+                    if parsed_town != location_str and parsed_town != location_str.title():
+                        town_name, location_detail = parsed_town, parsed_location
+                        self.logger.debug(
+                            f"Used imported parser for '{location_str}' -> town='{town_name}', location='{location_detail}'"
+                        )
+                    else:
+                        self.logger.debug(
+                            f"Imported parser didn't improve parsing for '{location_str}', using fallback result"
+                        )
+                except (ImportError, AttributeError):
+                    # Fallback parser already used, that's fine
+                    pass
+                except Exception as e:
+                    self.logger.debug(f"Error in parse_sft_location (non-critical): {e}")
+                
+                self.logger.debug(
+                    f"Final parsed location '{location_str}' -> town='{town_name}', location='{location_detail}'"
+                )
+            
+            # Normalize location_detail for better matching (handle common variations)
+            normalized_location_detail = None
+            if location_detail and location_detail.lower() != 'unknown':
+                import re
+                # Remove common prefixes/suffixes that might not be in database
+                normalized_location_detail = location_detail.strip()
+                
+                # Remove parenthetical suffixes like "(AIRPORT)", "(NEAR DUNDAS SQ)"
+                normalized_location_detail = re.sub(r'\s*\([^)]+\)\s*$', '', normalized_location_detail)
+                
+                # Remove "NEAR" prefix (case-insensitive)
+                normalized_location_detail = re.sub(r'^NEAR\s+', '', normalized_location_detail, flags=re.IGNORECASE)
+                
+                # Normalize spaces (multiple spaces to single, trim)
+                normalized_location_detail = ' '.join(normalized_location_detail.split())
+                
+                # Normalize hyphens/spaces in HWY patterns: "HWY 427" -> "HWY-427", "HWY427" -> "HWY-427"
+                normalized_location_detail = re.sub(r'HWY\s*(\d+)', r'HWY-\1', normalized_location_detail, flags=re.IGNORECASE)
+                
+                # Handle common typos: "Trafalger" -> "Trafalgar"
+                normalized_location_detail = normalized_location_detail.replace('Trafalger', 'Trafalgar')
+                normalized_location_detail = normalized_location_detail.replace('trafalger', 'Trafalgar')
+                
+                # Normalize "&" spacing: "FRONT  & SPADINA" -> "Front & Spadina"
+                normalized_location_detail = re.sub(r'\s*&\s*', ' & ', normalized_location_detail)
+                
+                # Capitalize properly (title case but preserve acronyms)
+                words = normalized_location_detail.split()
+                normalized_words = []
+                for word in words:
+                    # Preserve common acronyms and abbreviations
+                    if word.upper() in ['HWY', 'SQ', 'ST', 'RD', 'E', 'W', 'N', 'S']:
+                        normalized_words.append(word.upper())
+                    elif word.upper() in ['&', 'AND']:
+                        normalized_words.append('&')
+                    else:
+                        normalized_words.append(word.capitalize())
+                normalized_location_detail = ' '.join(normalized_words)
+                
+                self.logger.debug(
+                    f"Normalized location_detail: '{location_detail}' -> '{normalized_location_detail}'"
+                )
+            
+            # Try multiple matching strategies
+            # Strategy 1: Match both town and location exactly (case-insensitive)
+            if town_name and location_detail:
+                location = self.db.query(Location).filter(
+                    Location.source_id == source.id,
+                    Location.town.ilike(town_name),
+                    Location.location.ilike(location_detail)
+                ).first()
+            
+            # Strategy 2: Match town exactly, normalized location exactly
+            if not location and town_name and normalized_location_detail:
+                location = self.db.query(Location).filter(
+                    Location.source_id == source.id,
+                    Location.town.ilike(town_name),
+                    Location.location.ilike(normalized_location_detail)
+                ).first()
+            
+            # Strategy 3: Match town exactly, location with wildcards (original)
+            if not location and town_name and location_detail:
+                location = self.db.query(Location).filter(
+                    Location.source_id == source.id,
+                    Location.town.ilike(town_name),
+                    Location.location.ilike(f"%{location_detail}%")
+                ).first()
+            
+            # Strategy 4: Match town exactly, normalized location with wildcards
+            if not location and town_name and normalized_location_detail:
+                location = self.db.query(Location).filter(
+                    Location.source_id == source.id,
+                    Location.town.ilike(town_name),
+                    Location.location.ilike(f"%{normalized_location_detail}%")
+                ).first()
+            
+            # Strategy 5: Match town with wildcards, location exactly
+            if not location and town_name and location_detail:
+                location = self.db.query(Location).filter(
+                    Location.source_id == source.id,
+                    Location.town.ilike(f"%{town_name}%"),
+                    Location.location.ilike(location_detail)
+                ).first()
+            
+            # Strategy 6: Match town only (exact) - if location_detail is "unknown"
+            if not location and town_name and (not location_detail or location_detail.lower() == 'unknown'):
+                location = self.db.query(Location).filter(
+                    Location.source_id == source.id,
+                    Location.town.ilike(town_name),
+                    Location.location.ilike('unknown')
+                ).first()
+            
+            # Strategy 7: Match town only (exact) - any location
+            if not location and town_name:
+                location = self.db.query(Location).filter(
+                    Location.source_id == source.id,
+                    Location.town.ilike(town_name)
+                ).first()
+            
+            # Strategy 8: Match town only (partial)
+            if not location and town_name:
+                location = self.db.query(Location).filter(
+                    Location.source_id == source.id,
+                    Location.town.ilike(f"%{town_name}%")
+                ).first()
+            
+            # Strategy 6: Auto-create location for SFT if town is known
+            if not location and town_name and location_detail and self.config.short_name == 'SFT':
+                # Check if we should auto-create (only for known SFT towns)
+                known_sft_towns = {'Vaughan', 'Midtown', 'Downtown', 'Etobicoke', 
+                                  'Oakville', 'Mississauga', 'Brampton', 'North York',
+                                  'Scarborough', 'Markham', 'Richmond Hill'}
+                
+                if town_name in known_sft_towns:
+                    self.logger.info(
+                        f"Auto-creating location '{town_name}' / '{location_detail}' "
+                        f"for source {source.name} (ID: {source.id})"
+                    )
+                    try:
+                        new_location = Location(
+                            source_id=source.id,
+                            town=town_name,
+                            location=location_detail,
+                            is_default=False
+                        )
+                        self.db.add(new_location)
+                        self.db.flush()
+                        location = new_location
+                        self.logger.info(f"Created new location: {town_name} / {location_detail}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to auto-create location '{town_name}': {e}")
+                        self.db.rollback()
+            
+            # If still not found, log warning and use default location
             if not location:
+                self.logger.warning(
+                    f"Location not found for '{location_str}' (town: '{town_name}') "
+                    f"for source {source.name} (ID: {source.id}). Using default location."
+                )
                 # Use default location
                 location = self.db.query(Location).filter(
                     Location.source_id == source.id,
                     Location.is_default == True
                 ).first()
+            
+            # If no default location exists, log error
+            if not location:
+                self.logger.error(
+                    f"No default location found for source {source.name} (ID: {source.id}). "
+                    f"Cannot create schedule for location '{location_str}'."
+                )
 
             location_id = location.id if location else None
             day_of_week = schedule_data.get('day_of_week')

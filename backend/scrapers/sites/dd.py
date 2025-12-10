@@ -28,9 +28,6 @@ from ..utils.normalizers import (
     normalize_bust_size,
 )
 
-# Module-level logger for DD scraper
-dd_logger = logging.getLogger("scraper.DD")
-
 
 # DD location mapping: known location suffixes and their town prefixes
 DD_LOCATION_PATTERNS = {
@@ -360,14 +357,9 @@ class DDScraper(BaseScraper):
         """
         await self._ensure_crawler()
         full_url = f"{self.config.base_url}{profile_url}/"
-        self.logger.info(f"📍 Scraping profile: {profile_url}")
 
         soup = await self.crawler.fetch_soup(full_url)
         profile = self._parse_profile(soup, profile_url)
-
-        # Log extracted data
-        extracted = [k for k, v in profile.items() if v]
-        self.logger.info(f"   ✓ {profile_url}: extracted {', '.join(extracted) if extracted else 'no data'}")
 
         return profile
 
@@ -555,6 +547,80 @@ class DDScraper(BaseScraper):
 
         if tags:
             profile['tags'] = tags
+
+        # Extract schedules from profile page
+        # Note: Profile page schedules are handled differently - the main schedule comes
+        # from the schedule page (data-doll-info JSON), not the profile page.
+        # The profile page may have a schedule display section but it's typically
+        # for display purposes only. We get authoritative schedule data from the
+        # schedule page parsing in _parse_schedule() which is passed through to 
+        # normalize_listing() via all_schedule_items parameter.
+        
+        # Look for schedule div for additional schedule info (if different from schedule page)
+        schedule_div = soup.find('div', class_='schedule')
+        if schedule_div:
+            schedules = []
+            # Method 1: Check for <p> elements with data-date attributes
+            schedule_entries = schedule_div.find_all('p', attrs={'data-date': True})
+            
+            for entry in schedule_entries:
+                date_str = entry.get('data-date', '')
+                loc_str = entry.get('data-location', '[]')
+                
+                # Parse location from data-location attribute
+                try:
+                    loc_list = eval(loc_str) if loc_str else []
+                    location_str = loc_list[0] if loc_list else ''
+                except:
+                    location_str = ''
+                
+                # Parse time from span.hours
+                hours_elem = entry.find('span', class_='hours')
+                hours_str = hours_elem.get_text(strip=True) if hours_elem else ''
+                start_time, end_time = parse_dd_time(hours_str)
+                
+                day_of_week = parse_dd_date(date_str)
+                town, location = parse_dd_location(location_str)
+                
+                # Skip if Outcall (town is None)
+                if town is None:
+                    continue
+                
+                if day_of_week:
+                    schedules.append({
+                        'day_of_week': day_of_week,
+                        'location': f"{town}, {location}",
+                        'start_time': start_time,
+                        'end_time': end_time,
+                    })
+            
+            # Method 2: If no data-date entries, look for other schedule formats
+            if not schedules:
+                # Try finding schedule items in different formats
+                # Check for list items or divs with schedule info
+                for item in schedule_div.find_all(['li', 'div', 'span'], class_=lambda x: x and 'schedule' in x.lower() if x else False):
+                    text = item.get_text(' ', strip=True)
+                    # Try to extract day from text
+                    for day_abbrev, day_full in [('mon', 'Monday'), ('tue', 'Tuesday'), ('wed', 'Wednesday'),
+                                                  ('thu', 'Thursday'), ('fri', 'Friday'), ('sat', 'Saturday'), ('sun', 'Sunday')]:
+                        if day_abbrev in text.lower():
+                            # Found a day, try to extract time
+                            start_time, end_time = parse_dd_time(text)
+                            schedules.append({
+                                'day_of_week': day_full,
+                                'location': 'unknown, unknown',
+                                'start_time': start_time,
+                                'end_time': end_time,
+                            })
+                            break
+            
+            if schedules:
+                profile['schedules'] = schedules
+                self.logger.debug(f"Extracted {len(schedules)} schedule(s) from profile page for {profile_slug}")
+
+        # Log extracted profile fields (single consolidated log)
+        extracted = [k for k, v in profile.items() if v]
+        self.logger.info(f"   ✓ {profile_slug}: extracted {', '.join(extracted) if extracted else 'no data'}")
 
         return profile
 
