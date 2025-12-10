@@ -7,7 +7,7 @@ or all at once. Handles parallel execution and result aggregation.
 
 import asyncio
 from typing import Dict, List, Optional, Type
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from .base import BaseScraper, ScrapeResult, ScraperType
@@ -92,8 +92,8 @@ class ScraperManager:
         if not scraper:
             return ScrapeResult(
                 source=site_key,
-                started_at=datetime.utcnow(),
-                completed_at=datetime.utcnow(),
+                started_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(timezone.utc),
                 errors=1,
                 error_details=[{'error': f'Scraper not implemented for {site_key}'}]
             )
@@ -107,8 +107,8 @@ class ScraperManager:
             logger.error(f"Scraper failed for {site_key}: {e}")
             result = ScrapeResult(
                 source=site_key,
-                started_at=datetime.utcnow(),
-                completed_at=datetime.utcnow(),
+                started_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(timezone.utc),
                 errors=1,
                 error_details=[{'error': str(e)}]
             )
@@ -146,8 +146,8 @@ class ScraperManager:
                 if isinstance(result, Exception):
                     self.results[key] = ScrapeResult(
                         source=key,
-                        started_at=datetime.utcnow(),
-                        completed_at=datetime.utcnow(),
+                        started_at=datetime.now(timezone.utc),
+                        completed_at=datetime.now(timezone.utc),
                         errors=1,
                         error_details=[{'error': str(result)}]
                     )

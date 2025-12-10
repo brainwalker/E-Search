@@ -1,7 +1,12 @@
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text, ForeignKey, Table, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def utc_now():
+    """Return current UTC time (timezone-aware). Replaces deprecated datetime.utcnow()."""
+    return datetime.now(timezone.utc)
 
 Base = declarative_base()
 
@@ -22,7 +27,7 @@ class Source(Base):
     image_base_url = Column(String)  # Base URL for images (e.g., https://example.com/thumbnails/)
     active = Column(Boolean, default=True)
     last_scraped = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     listings = relationship("Listing", back_populates="source")
     locations = relationship("Location", back_populates="source")
@@ -45,7 +50,7 @@ class Location(Base):
     is_default = Column(Boolean, default=False, index=True)  # Mark the "Unknown, unknown" as default
 
     # Metadata
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Relationships
     source = relationship("Source", back_populates="locations")
@@ -90,8 +95,8 @@ class Listing(Base):
     # Metadata
     is_active = Column(Boolean, default=True, index=True)
     is_expired = Column(Boolean, default=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationships
     source = relationship("Source", back_populates="listings")
@@ -119,7 +124,7 @@ class Schedule(Base):
     end_time = Column(String)  # 12AM
 
     is_expired = Column(Boolean, default=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     listing = relationship("Listing", back_populates="schedules")
     location = relationship("Location", back_populates="schedules")
@@ -140,7 +145,7 @@ class Tier(Base):
     outcall_per_hr = Column(String)  # Price as string (e.g., "$270" or "Unknown")
 
     # Metadata
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     # Relationships
     source = relationship("Source", back_populates="tiers")
@@ -164,7 +169,15 @@ class Tag(Base):
 # Database setup - import settings for database URL
 from api.config import settings
 
-engine = create_engine(settings.database_url, echo=False)
+# Configure engine with connection pooling for better performance
+engine = create_engine(
+    settings.database_url,
+    echo=False,
+    pool_size=5,           # Number of connections to keep in pool
+    max_overflow=10,       # Additional connections allowed beyond pool_size
+    pool_pre_ping=True,    # Verify connections before use (handles stale connections)
+    pool_recycle=3600,     # Recycle connections after 1 hour
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():

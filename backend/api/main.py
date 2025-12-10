@@ -11,6 +11,7 @@ import logging
 import asyncio
 
 from api.database import get_db, init_db, Listing, Schedule, Source, Tag, Location, Tier, listing_tags, engine
+from sqlalchemy.orm import joinedload
 from api.scraper import SexyFriendsTorontoScraper
 from api.config import settings
 from scrapers.manager import ScraperManager, SCRAPER_REGISTRY
@@ -69,6 +70,11 @@ uvicorn_access_logger.addFilter(PollingEndpointFilter())
 
 # Global shutdown event
 shutdown_event = asyncio.Event()
+
+# Global tier cache with TTL
+_tier_cache: dict = {}
+_tier_cache_timestamp: float = 0
+TIER_CACHE_TTL_SECONDS = 300  # 5 minutes
 
 
 async def cleanup_resources():
@@ -324,7 +330,20 @@ async def scrape_all_sources(
 
 
 def get_tier_rates_cache(db: Session) -> dict:
-    """Build a cache of tier rates for efficient lookup"""
+    """
+    Build a cache of tier rates for efficient lookup.
+    Uses global cache with TTL to avoid rebuilding on every request.
+    """
+    global _tier_cache, _tier_cache_timestamp
+    import time
+
+    current_time = time.time()
+
+    # Return cached version if still valid
+    if _tier_cache and (current_time - _tier_cache_timestamp) < TIER_CACHE_TTL_SECONDS:
+        return _tier_cache
+
+    # Rebuild cache
     tiers = db.query(Tier).all()
     cache = {}
     for tier in tiers:
@@ -338,7 +357,19 @@ def get_tier_rates_cache(db: Session) -> dict:
             "incall_1hr": tier.incall_1hr,
             "outcall_per_hr": tier.outcall_per_hr,
         }
+
+    # Update global cache
+    _tier_cache = cache
+    _tier_cache_timestamp = current_time
+
     return cache
+
+
+def invalidate_tier_cache():
+    """Invalidate the tier cache (call after tier updates)."""
+    global _tier_cache, _tier_cache_timestamp
+    _tier_cache = {}
+    _tier_cache_timestamp = 0
 
 
 def enrich_listing_with_tier_rates(listing: Listing, tier_cache: dict) -> dict:
@@ -398,7 +429,12 @@ async def get_listings(
     db: Session = Depends(get_db)
 ):
     """Get listings with various filters"""
-    query = db.query(Listing)
+    # Use eager loading to prevent N+1 query problem
+    query = db.query(Listing).options(
+        joinedload(Listing.schedules).joinedload(Schedule.location),
+        joinedload(Listing.tags),
+        joinedload(Listing.source)
+    )
 
     # Filter by source
     if source_ids:
@@ -455,10 +491,15 @@ async def get_listings(
 @app.get("/api/listings/{listing_id}", response_model=ListingResponse)
 async def get_listing(listing_id: int, db: Session = Depends(get_db)):
     """Get a single listing by ID"""
-    listing = db.query(Listing).filter(Listing.id == listing_id).first()
+    # Use eager loading to prevent N+1 query problem
+    listing = db.query(Listing).options(
+        joinedload(Listing.schedules).joinedload(Schedule.location),
+        joinedload(Listing.tags),
+        joinedload(Listing.source)
+    ).filter(Listing.id == listing_id).first()
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
-    
+
     # Build tier cache and enrich with tier rates
     tier_cache = get_tier_rates_cache(db)
     return enrich_listing_with_tier_rates(listing, tier_cache)
@@ -602,14 +643,46 @@ async def debug_listing_extraction(listing_id: int, db: Session = Depends(get_db
             # For new scrapers, use scrape_profile and format as debug result
             profile_data = await scraper.scrape_profile(listing.profile_url)
             # Format as debug result structure
+            # Build extractions dict with raw_text field populated from profile_data
+            fields = ['tier', 'age', 'nationality', 'ethnicity', 'height', 'weight',
+                      'measurements', 'bust', 'eye_color', 'hair_color', 'service_type']
+            extractions = {}
+            text_snippets = {}
+            for field in fields:
+                value = profile_data.get(field)
+                matched = value is not None
+                extractions[field] = {
+                    'matched': matched,
+                    'final_value': value,
+                    'raw_text': str(value) if value is not None else None,  # Show what was extracted
+                }
+                if matched and value:
+                    text_snippets[field] = str(value)
+
+            # Add images and tags extractions
+            extractions['images'] = {
+                'matched': bool(profile_data.get('images')),
+                'final_value': profile_data.get('images', []),
+                'count': len(profile_data.get('images', [])),
+            }
+            extractions['tags'] = {
+                'matched': bool(profile_data.get('tags')),
+                'final_value': profile_data.get('tags', []),
+            }
+
+            # Add schedules extraction
+            schedules = profile_data.get('schedules', [])
+            extractions['schedules'] = {
+                'matched': bool(schedules),
+                'final_value': schedules,
+                'count': len(schedules),
+            }
+
             debug_result = {
                 'profile_url': listing.profile_url,
                 'profile_data': profile_data,
-                'extractions': {field: {'matched': field in profile_data and profile_data[field] is not None, 
-                                       'final_value': profile_data.get(field)} 
-                               for field in ['tier', 'age', 'nationality', 'ethnicity', 'height', 'weight', 
-                                           'measurements', 'bust', 'eye_color', 'hair_color', 'service_type']},
-                'text_snippets': {},
+                'extractions': extractions,
+                'text_snippets': text_snippets,
             }
         
         # Add current database values for comparison

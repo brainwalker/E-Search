@@ -1820,7 +1820,35 @@
                     </div>
                 `;
             }
-            
+
+            // Schedules section
+            if (extractions.schedules) {
+                const schedules = extractions.schedules.final_value || [];
+                html += `
+                    <h4 style="color: var(--accent-primary); margin: 24px 0 12px;">📅 Schedules Found: ${schedules.length}</h4>
+                `;
+                if (schedules.length > 0) {
+                    html += `<div style="display: grid; gap: 8px;">`;
+                    for (const sched of schedules) {
+                        const location = typeof sched.location === 'object'
+                            ? `${sched.location.town || ''}, ${sched.location.location || ''}`.replace(', ,', ',').replace(/^, |, $/g, '')
+                            : (sched.location || '');
+                        html += `
+                            <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px; border-left: 3px solid var(--warning);">
+                                <div style="font-weight: 600; color: var(--warning);">${sched.day_of_week || 'Unknown Day'}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px;">
+                                    ${sched.start_time || ''} ${sched.end_time ? '- ' + sched.end_time : ''}
+                                    ${location ? ' @ ' + location : ''}
+                                </div>
+                            </div>
+                        `;
+                    }
+                    html += `</div>`;
+                } else {
+                    html += `<div style="color: var(--text-muted); font-size: 0.85rem;">No schedules found in profile</div>`;
+                }
+            }
+
             // Tier rates section
             if (debugData.tier_rates) {
                 const rates = debugData.tier_rates;

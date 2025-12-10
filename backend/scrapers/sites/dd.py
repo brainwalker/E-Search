@@ -17,7 +17,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from bs4 import BeautifulSoup
 
-from ..base import BaseScraper, ScheduleItem, ScrapedListing
+from ..base import BaseScraper, ScheduleItem
 from ..config import get_site_config
 from ..crawlers.stealth import StealthCrawler
 from ..utils.normalizers import (
@@ -268,9 +268,9 @@ class DDScraper(BaseScraper):
 
                             # Parse location from data-location attribute
                             try:
-                                loc_list = eval(loc_str) if loc_str else []
+                                loc_list = json.loads(loc_str) if loc_str else []
                                 location_str = loc_list[0] if loc_list else ''
-                            except:
+                            except (json.JSONDecodeError, TypeError, IndexError):
                                 location_str = ''
 
                             # Parse time from span.hours
@@ -569,9 +569,9 @@ class DDScraper(BaseScraper):
                 
                 # Parse location from data-location attribute
                 try:
-                    loc_list = eval(loc_str) if loc_str else []
+                    loc_list = json.loads(loc_str) if loc_str else []
                     location_str = loc_list[0] if loc_list else ''
-                except:
+                except (json.JSONDecodeError, TypeError, IndexError):
                     location_str = ''
                 
                 # Parse time from span.hours
@@ -623,45 +623,4 @@ class DDScraper(BaseScraper):
         self.logger.info(f"   ✓ {profile_slug}: extracted {', '.join(extracted) if extracted else 'no data'}")
 
         return profile
-
-    def normalize_listing(self, schedule_item: ScheduleItem, profile_data: Dict, all_schedule_items: Optional[List[ScheduleItem]] = None) -> ScrapedListing:
-        """
-        Create ScrapedListing from schedule item and profile data.
-
-        Uses schedule tier if available, falls back to profile tier.
-        Includes all schedules for this profile.
-        """
-        if all_schedule_items is None:
-            all_schedule_items = [schedule_item]
-        
-        tier = schedule_item.tier or profile_data.get('tier')
-
-        # Convert all schedule items to schedule dicts
-        schedules = [{
-            'day_of_week': item.day_of_week,
-            'location': item.location,
-            'start_time': item.start_time,
-            'end_time': item.end_time,
-        } for item in all_schedule_items]
-
-        return ScrapedListing(
-            name=schedule_item.name,
-            profile_url=schedule_item.profile_url,
-            source=self.config.short_name,
-            tier=tier,
-            age=profile_data.get('age'),
-            nationality=profile_data.get('nationality'),
-            ethnicity=profile_data.get('ethnicity'),
-            height=profile_data.get('height'),
-            weight=profile_data.get('weight'),
-            bust=profile_data.get('bust'),
-            bust_type=profile_data.get('bust_type'),
-            measurements=profile_data.get('measurements'),
-            hair_color=profile_data.get('hair_color'),
-            eye_color=profile_data.get('eye_color'),
-            service_type=profile_data.get('service_type'),
-            images=profile_data.get('images', []),
-            tags=profile_data.get('tags', []),
-            schedules=schedules,
-            raw_data=profile_data,
-        )
+    # normalize_listing uses base class implementation

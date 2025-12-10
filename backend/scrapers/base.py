@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import json
 
@@ -132,6 +132,9 @@ class BaseScraper(ABC):
     - save_listing(): Custom database saving logic
     """
 
+    # Number of listings to process before committing (batch size)
+    COMMIT_BATCH_SIZE = 10
+
     def __init__(self, config: SiteConfig, db_session=None):
         """
         Initialize the scraper.
@@ -144,11 +147,13 @@ class BaseScraper(ABC):
         self.db = db_session
         self.result = ScrapeResult(
             source=config.short_name,
-            started_at=datetime.utcnow()
+            started_at=datetime.now(timezone.utc)
         )
         self.logger = logging.getLogger(f"scraper.{config.short_name}")
         # Child loggers of 'scraper' will inherit handlers from parent 'scraper' logger
         # which is configured in main.py to prevent duplicates
+        # Counter for batch commits
+        self._pending_commits = 0
     
     def _parse_sft_location_fallback(self, location_str: str) -> tuple:
         """
@@ -201,7 +206,7 @@ class BaseScraper(ABC):
         Convert raw scraped data to standardized ScrapedListing.
 
         Override this method for site-specific normalization.
-        
+
         Args:
             schedule_item: First schedule item (for name, profile_url, tier)
             profile_data: Scraped profile data
@@ -209,7 +214,10 @@ class BaseScraper(ABC):
         """
         if all_schedule_items is None:
             all_schedule_items = [schedule_item]
-        
+
+        # Prefer schedule tier over profile tier (schedule is more current)
+        tier = schedule_item.tier or profile_data.get('tier')
+
         # Convert all schedule items to schedule dicts
         schedules = [{
             'day_of_week': item.day_of_week,
@@ -217,12 +225,12 @@ class BaseScraper(ABC):
             'start_time': item.start_time,
             'end_time': item.end_time,
         } for item in all_schedule_items]
-        
+
         return ScrapedListing(
             name=schedule_item.name,
             profile_url=schedule_item.profile_url,
             source=self.config.short_name,
-            tier=profile_data.get('tier') or schedule_item.tier,
+            tier=tier,
             age=profile_data.get('age'),
             nationality=profile_data.get('nationality'),
             ethnicity=profile_data.get('ethnicity'),
@@ -570,8 +578,22 @@ class BaseScraper(ABC):
             if tag.id not in existing_tag_ids:
                 db_listing.tags.append(tag)
 
-        self.db.commit()
+        # Batch commits for better performance
+        self._pending_commits += 1
+        if self._pending_commits >= self.COMMIT_BATCH_SIZE:
+            self.db.commit()
+            self._pending_commits = 0
+        else:
+            # Flush to get IDs but don't commit yet
+            self.db.flush()
+
         return is_new
+
+    def _flush_pending_commits(self):
+        """Commit any pending changes. Call at end of scrape."""
+        if self.db and self._pending_commits > 0:
+            self.db.commit()
+            self._pending_commits = 0
 
     async def run(self) -> ScrapeResult:
         """
@@ -629,13 +651,16 @@ class BaseScraper(ABC):
                 except Exception as e:
                     self.result.errors += 1
                     self.result.error_details.append({
-                        'profile_url': item.profile_url,
+                        'profile_url': profile_url,
                         'error': str(e),
                     })
-                    self.logger.error(f"Error scraping {item.profile_url}: {e}")
+                    self.logger.error(f"Error scraping {profile_url}: {e}")
                     # Continue to next profile instead of failing entire scrape
 
-            self.result.completed_at = datetime.utcnow()
+            # Flush any remaining pending commits
+            self._flush_pending_commits()
+
+            self.result.completed_at = datetime.now(timezone.utc)
             duration = self.result.duration_seconds or 0
             self.logger.info(
                 f"✅ Scrape complete in {duration:.1f}s: {self.result.new} new, "
@@ -647,6 +672,11 @@ class BaseScraper(ABC):
         except Exception as e:
             self.result.errors += 1
             self.result.error_details.append({'error': str(e)})
-            self.result.completed_at = datetime.utcnow()
+            self.result.completed_at = datetime.now(timezone.utc)
             self.logger.error(f"Scrape failed: {e}")
+            # Try to commit whatever we have on error
+            try:
+                self._flush_pending_commits()
+            except Exception:
+                pass
             raise

@@ -10,7 +10,7 @@ import json
 from typing import List, Dict, Any, Optional, Tuple
 from bs4 import BeautifulSoup
 
-from ..base import BaseScraper, ScheduleItem, ScrapedListing
+from ..base import BaseScraper, ScheduleItem
 from ..config import get_site_config
 from ..crawlers.static import StaticCrawler
 from ..utils.normalizers import (
@@ -343,47 +343,87 @@ class SFTScraper(BaseScraper):
         if tags:
             profile['tags'] = tags
 
+        # Extract schedules from profile page (div#schedule)
+        schedules = self._parse_profile_schedules(soup)
+        if schedules:
+            profile['schedules'] = schedules
+
         return profile
 
-    def normalize_listing(self, schedule_item: ScheduleItem, profile_data: Dict, all_schedule_items: Optional[List[ScheduleItem]] = None) -> ScrapedListing:
+    def _parse_profile_schedules(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
         """
-        Create ScrapedListing from schedule item and profile data.
+        Parse schedule information from the profile page's #schedule div.
 
-        Uses schedule tier if available, falls back to profile tier.
-        Includes all schedules for this profile.
+        Structure:
+        - div#schedule contains multiple .row elements (one per location)
+        - Each row has h5 with location name
+        - Each row has div.dateg elements for each day
+        - Inside dateg: h6 has day name, p.mb-0 has time
+
+        Returns:
+            List of schedule dicts with day_of_week, location, start_time, end_time
         """
-        if all_schedule_items is None:
-            all_schedule_items = [schedule_item]
-        
-        # Prefer schedule tier over profile tier
-        tier = schedule_item.tier or profile_data.get('tier')
+        schedules = []
+        schedule_div = soup.find('div', id='schedule')
 
-        # Convert all schedule items to schedule dicts
-        schedules = [{
-            'day_of_week': item.day_of_week,
-            'location': item.location,
-            'start_time': item.start_time,
-            'end_time': item.end_time,
-        } for item in all_schedule_items]
+        if not schedule_div:
+            self.logger.debug("No schedule div found on profile page")
+            return schedules
 
-        return ScrapedListing(
-            name=schedule_item.name,
-            profile_url=schedule_item.profile_url,
-            source=self.config.short_name,
-            tier=tier,
-            age=profile_data.get('age'),
-            nationality=profile_data.get('nationality'),
-            ethnicity=profile_data.get('ethnicity'),
-            height=profile_data.get('height'),
-            weight=profile_data.get('weight'),
-            bust=profile_data.get('bust'),
-            bust_type=profile_data.get('bust_type'),
-            measurements=profile_data.get('measurements'),
-            hair_color=profile_data.get('hair_color'),
-            eye_color=profile_data.get('eye_color'),
-            service_type=profile_data.get('service_type'),
-            images=profile_data.get('images', []),
-            tags=profile_data.get('tags', []),
-            schedules=schedules,
-            raw_data=profile_data,
-        )
+        # Find all location rows
+        for row in schedule_div.find_all('div', class_='row'):
+            # Get location from h5
+            location_h5 = row.find('h5')
+            if not location_h5:
+                continue
+
+            location_text = location_h5.get_text(strip=True)
+            # Remove INCALL prefix and clean up
+            location_text = location_text.replace('INCALL', '').strip()
+
+            # Skip OUTCALL locations
+            if 'OUTCALL' in location_text.upper():
+                continue
+
+            # Find all day elements
+            for dateg in row.find_all('div', class_='dateg'):
+                # Get day name from h6
+                day_h6 = dateg.find('h6')
+                if not day_h6:
+                    continue
+
+                day_of_week = day_h6.get_text(strip=True)
+
+                # Get time from p.mb-0
+                time_p = dateg.find('p', class_='mb-0')
+                if not time_p:
+                    continue
+
+                time_text = time_p.get_text(strip=True)
+                if not time_text:
+                    continue
+
+                # Parse time range
+                start_time, end_time = extract_time_range(time_text)
+
+                schedules.append({
+                    'day_of_week': day_of_week,
+                    'location': location_text,
+                    'start_time': start_time,
+                    'end_time': end_time,
+                })
+
+        self.logger.debug(f"Extracted {len(schedules)} schedule(s) from profile page")
+        return schedules
+
+    async def run(self):
+        """Override run to ensure crawler cleanup."""
+        try:
+            return await super().run()
+        finally:
+            # Clean up HTTP client resources
+            if hasattr(self.crawler, 'close'):
+                try:
+                    await self.crawler.close()
+                except Exception as e:
+                    self.logger.warning(f"Error during crawler cleanup: {e}")

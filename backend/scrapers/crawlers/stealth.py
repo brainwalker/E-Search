@@ -106,17 +106,17 @@ class StealthCrawler:
             if self._context:
                 try:
                     await self._context.close()
-                except:
+                except Exception:
                     pass
             if self._browser:
                 try:
                     await self._browser.close()
-                except:
+                except Exception:
                     pass
             if self._playwright:
                 try:
                     await self._playwright.stop()
-                except:
+                except Exception:
                     pass
             
             # Small delay to let resources free up
@@ -226,7 +226,7 @@ class StealthCrawler:
                     if test_page:
                         try:
                             await test_page.close()
-                        except:
+                        except Exception:
                             pass
                     raise Exception(f"Browser context not working: {e}")
                     
@@ -439,7 +439,7 @@ class StealthCrawler:
                 if page and not page_was_reused:
                     try:
                         await page.close()
-                    except:
+                    except Exception:
                         pass
 
                 # Check if error is due to closed context/browser

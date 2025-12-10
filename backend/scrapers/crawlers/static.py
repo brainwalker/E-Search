@@ -19,7 +19,7 @@ class StaticCrawler:
     Wrapper for fetching static HTML pages.
 
     Uses httpx for async HTTP requests and BeautifulSoup for parsing.
-    Provides rate limiting and error handling.
+    Provides rate limiting, connection pooling, and error handling.
     """
 
     def __init__(
@@ -47,6 +47,8 @@ class StaticCrawler:
             'Accept-Language': 'en-US,en;q=0.9',
         }
         self._last_request_time = 0
+        # Reusable HTTP client with connection pooling
+        self._client: Optional[httpx.AsyncClient] = None
 
     async def _wait_for_rate_limit(self):
         """Wait to respect rate limit."""
@@ -56,6 +58,27 @@ class StaticCrawler:
         if elapsed < self.rate_limit:
             await asyncio.sleep(self.rate_limit - elapsed)
         self._last_request_time = time.time()
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create reusable HTTP client with connection pooling."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                follow_redirects=True,
+                timeout=self.timeout,
+                headers=self.headers,
+                limits=httpx.Limits(
+                    max_keepalive_connections=5,
+                    max_connections=10,
+                    keepalive_expiry=30.0
+                )
+            )
+        return self._client
+
+    async def close(self):
+        """Close the HTTP client and release resources."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 
     async def fetch(
         self,
@@ -79,17 +102,14 @@ class StaticCrawler:
         await self._wait_for_rate_limit()
 
         last_error = None
+        client = await self._get_client()
+
         for attempt in range(self.max_retries):
             try:
-                async with httpx.AsyncClient(
-                    follow_redirects=True,
-                    timeout=self.timeout,
-                    headers=self.headers,
-                    cookies=cookies
-                ) as client:
-                    response = await client.get(url)
-                    response.raise_for_status()
-                    return response.text
+                # Set cookies for this request if provided
+                response = await client.get(url, cookies=cookies)
+                response.raise_for_status()
+                return response.text
 
             except httpx.HTTPError as e:
                 last_error = e
