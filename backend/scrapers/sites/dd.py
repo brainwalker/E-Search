@@ -420,19 +420,32 @@ class DDScraper(BaseScraper):
             if bust_match:
                 profile['bust'] = normalize_bust_size(bust_match.group(1))
 
-            # Figure/Measurements - "Figure: 32D-24-36" format
+            # Figure/Measurements - handle multiple formats:
+            # "Figure: 34H" (bust only)
+            # "Figure: 36C–25–36" (full measurements with en-dash/em-dash)
+            # "Figure: 32D-24-36" (full measurements with hyphen)
             figure_match = re.search(
-                r'(?:Figure|Measurements?)[:\s]+(\d+[A-Za-z]*\s*[-/]\s*\d+\s*[-/]\s*\d+)',
+                r'(?:Figure|Measurements?)[:\s]+(\d+[A-Za-z]+(?:\s*[–—\-/]\s*\d+\s*[–—\-/]\s*\d+)?)',
                 text, re.IGNORECASE
             )
             if figure_match:
-                measurements = normalize_measurements(figure_match.group(1))
-                profile['measurements'] = measurements
-                # Also extract bust from figure if not already found
-                if not profile.get('bust'):
-                    bust_from_fig = re.match(r'(\d+[A-Za-z]+)', measurements)
-                    if bust_from_fig:
-                        profile['bust'] = bust_from_fig.group(1)
+                figure_value = figure_match.group(1).strip()
+                # Check if it's just bust size (e.g., "34H") or full measurements
+                if re.match(r'^\d+[A-Za-z]+$', figure_value):
+                    # Just bust size - extract and set bust if not already found
+                    if not profile.get('bust'):
+                        profile['bust'] = normalize_bust_size(figure_value)
+                else:
+                    # Full measurements - normalize and set
+                    # Replace en-dash/em-dash with hyphen for normalization
+                    measurements = figure_value.replace('–', '-').replace('—', '-')
+                    measurements = normalize_measurements(measurements)
+                    profile['measurements'] = measurements
+                    # Also extract bust from figure if not already found
+                    if not profile.get('bust'):
+                        bust_from_fig = re.match(r'(\d+[A-Za-z]+)', measurements)
+                        if bust_from_fig:
+                            profile['bust'] = bust_from_fig.group(1)
 
             # Nationality - "Nationality: European" format
             nat_match = re.search(r'Nationality[:\s]+([A-Za-z\s/-]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
@@ -442,10 +455,19 @@ class DDScraper(BaseScraper):
                 if nationality and len(nationality) > 1:
                     profile['nationality'] = nationality.title()
 
-            # Ethnicity
-            eth_match = re.search(r'Ethnicity[:\s]+([A-Za-z\s/]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
+            # Ethnicity - handle patterns like:
+            # "Ethnicity: Caucasian"
+            # "Ethnicity: Caucasian (Irish, British, German)"
+            # "Ethnicity: Caucasian (French/Scottish)"
+            eth_match = re.search(
+                r'Ethnicity[:\s]+([A-Za-z\s/]+(?:\([^)]+\))?)',
+                text, re.IGNORECASE
+            )
             if eth_match:
                 ethnicity = eth_match.group(1).strip()
+                # Stop at next field label if captured
+                ethnicity = re.sub(r'\s+(?:Age|Height|Weight|Bust|Hair|Eyes?|Service|Nationality|Figure|Measurements)[:\s].*$', '', ethnicity, flags=re.IGNORECASE)
+                ethnicity = ethnicity.strip().rstrip('.,;:')
                 if ethnicity and len(ethnicity) > 1:
                     profile['ethnicity'] = ethnicity.title()
 
@@ -469,11 +491,11 @@ class DDScraper(BaseScraper):
             elif 'enhanced' in text.lower():
                 profile['bust_type'] = 'Enhanced'
 
-        # Extract service type from right side div - "Service Details: GFE"
+        # Extract service type from right side div - "Service Details: GFE" or "Service Details:GFE & PSE"
         right_div = soup.find('div', class_='right')
         if right_div:
             right_text = right_div.get_text(' ', strip=True)
-            service_match = re.search(r'Service\s*(?:Details?|Type)?[:\s]+([A-Za-z\s/,]+?)(?:\s+[A-Z][a-z]+:|$)', right_text, re.IGNORECASE)
+            service_match = re.search(r'Service\s*(?:Details?|Type)?[:\s]+([A-Za-z\s/,&]+?)(?:\s+[A-Z][a-z]+:|$)', right_text, re.IGNORECASE)
             if service_match:
                 service = service_match.group(1).strip()
                 if service and len(service) > 1:
@@ -482,7 +504,7 @@ class DDScraper(BaseScraper):
         # Also try to find service type in stats table if not found
         if not profile.get('service_type') and stats_table:
             text = stats_table.get_text(' ', strip=True)
-            service_match = re.search(r'Service\s*(?:Details?|Type)?[:\s]+([A-Za-z\s/,]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
+            service_match = re.search(r'Service\s*(?:Details?|Type)?[:\s]+([A-Za-z\s/,&]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
             if service_match:
                 service = service_match.group(1).strip()
                 if service and len(service) > 1:
@@ -536,13 +558,25 @@ class DDScraper(BaseScraper):
 
         return profile
 
-    def normalize_listing(self, schedule_item: ScheduleItem, profile_data: Dict) -> ScrapedListing:
+    def normalize_listing(self, schedule_item: ScheduleItem, profile_data: Dict, all_schedule_items: Optional[List[ScheduleItem]] = None) -> ScrapedListing:
         """
         Create ScrapedListing from schedule item and profile data.
 
         Uses schedule tier if available, falls back to profile tier.
+        Includes all schedules for this profile.
         """
+        if all_schedule_items is None:
+            all_schedule_items = [schedule_item]
+        
         tier = schedule_item.tier or profile_data.get('tier')
+
+        # Convert all schedule items to schedule dicts
+        schedules = [{
+            'day_of_week': item.day_of_week,
+            'location': item.location,
+            'start_time': item.start_time,
+            'end_time': item.end_time,
+        } for item in all_schedule_items]
 
         return ScrapedListing(
             name=schedule_item.name,
@@ -562,11 +596,6 @@ class DDScraper(BaseScraper):
             service_type=profile_data.get('service_type'),
             images=profile_data.get('images', []),
             tags=profile_data.get('tags', []),
-            schedules=[{
-                'day_of_week': schedule_item.day_of_week,
-                'location': schedule_item.location,
-                'start_time': schedule_item.start_time,
-                'end_time': schedule_item.end_time,
-            }],
+            schedules=schedules,
             raw_data=profile_data,
         )

@@ -472,12 +472,63 @@ async def debug_listing_extraction(listing_id: int, db: Session = Depends(get_db
     if not listing.profile_url:
         raise HTTPException(status_code=400, detail="Listing has no profile URL")
     
+    # Get the source for this listing
+    source = db.query(Source).filter(Source.id == listing.source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found for listing")
+    
+    # Map source name to scraper registry key (same logic as refresh endpoint)
+    source_name_to_key = {
+        'SFT': 'sft',
+        'DD': 'discreet',
+        'SexyFriendsToronto': 'sft',  # Legacy support
+        'DiscreetDolls': 'discreet',  # Legacy support
+    }
+    
+    # Try exact match first, then case-insensitive
+    scraper_key = source_name_to_key.get(source.name)
+    if not scraper_key:
+        # Try case-insensitive lookup
+        source_name_lower = source.name.lower() if source.name else ''
+        for key, value in source_name_to_key.items():
+            if key.lower() == source_name_lower:
+                scraper_key = value
+                break
+    
+    if not scraper_key:
+        available = list(source_name_to_key.keys())
+        raise HTTPException(status_code=400, detail=f"No scraper available for source: '{source.name}'. Available: {available}")
+    
+    if scraper_key not in SCRAPER_REGISTRY:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Scraper '{scraper_key}' not found in registry. Available: {list(SCRAPER_REGISTRY.keys())}"
+        )
+    
     # Get the scraper for this source
-    scraper = SexyFriendsTorontoScraper(db)
+    manager = ScraperManager(db)
+    scraper = manager.get_scraper(scraper_key)
+    if not scraper:
+        raise HTTPException(status_code=500, detail=f"Failed to initialize scraper for {source.name}")
     
     try:
-        # Scrape with debug info
-        debug_result = await scraper.scrape_profile_with_debug(listing.profile_url)
+        # Check if scraper has scrape_profile_with_debug method (legacy SFT scraper)
+        if hasattr(scraper, 'scrape_profile_with_debug'):
+            # Use debug method if available (legacy scraper)
+            debug_result = await scraper.scrape_profile_with_debug(listing.profile_url)
+        else:
+            # For new scrapers, use scrape_profile and format as debug result
+            profile_data = await scraper.scrape_profile(listing.profile_url)
+            # Format as debug result structure
+            debug_result = {
+                'profile_url': listing.profile_url,
+                'profile_data': profile_data,
+                'extractions': {field: {'matched': field in profile_data and profile_data[field] is not None, 
+                                       'final_value': profile_data.get(field)} 
+                               for field in ['tier', 'age', 'nationality', 'ethnicity', 'height', 'weight', 
+                                           'measurements', 'bust', 'eye_color', 'hair_color', 'service_type']},
+                'text_snippets': {},
+            }
         
         # Add current database values for comparison
         debug_result['current_db_values'] = {
@@ -514,6 +565,14 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
     """
     Rescrape a listing's profile and update the database with new values.
     """
+    # Log to both console and file - use print for immediate visibility
+    import sys
+    print(f"\n{'='*60}", flush=True)
+    print(f"REFRESH ENDPOINT CALLED: listing_id={listing_id}", flush=True)
+    print(f"{'='*60}\n", flush=True)
+    sys.stdout.flush()
+    logging.info(f"=== REFRESH ENDPOINT CALLED for listing_id={listing_id} ===")
+    
     listing = db.query(Listing).filter(Listing.id == listing_id).first()
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
@@ -521,36 +580,133 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
     if not listing.profile_url:
         raise HTTPException(status_code=400, detail="Listing has no profile URL")
     
+    # Get the source for this listing
+    source = db.query(Source).filter(Source.id == listing.source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found for listing")
+    
+    print(f"Source found: name='{source.name}', id={source.id}", flush=True)
+    sys.stdout.flush()
+    logging.info(f"Source found: name='{source.name}', id={source.id}")
+    
+    # Map source name to scraper registry key
+    # Source names in DB use short_name from config (e.g., 'SFT', 'DD')
+    # Scraper registry uses lowercase keys (e.g., 'sft', 'discreet')
+    source_name_to_key = {
+        'SFT': 'sft',
+        'DD': 'discreet',
+        'SexyFriendsToronto': 'sft',  # Legacy support
+        'DiscreetDolls': 'discreet',  # Legacy support
+    }
+    
+    # Log for debugging
+    logging.info(f"Refreshing listing {listing_id}: source.name='{source.name}', profile_url='{listing.profile_url}'")
+    
+    # Try exact match first, then case-insensitive
+    scraper_key = source_name_to_key.get(source.name)
+    if not scraper_key:
+        # Try case-insensitive lookup
+        source_name_lower = source.name.lower() if source.name else ''
+        for key, value in source_name_to_key.items():
+            if key.lower() == source_name_lower:
+                scraper_key = value
+                logging.info(f"Matched source '{source.name}' to scraper key '{scraper_key}' (case-insensitive)")
+                break
+    
+    if not scraper_key:
+        available = list(source_name_to_key.keys())
+        error_msg = f"No scraper available for source: '{source.name}'. Available: {available}"
+        logging.error(error_msg)
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    if scraper_key not in SCRAPER_REGISTRY:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Scraper '{scraper_key}' not found in registry. Available: {list(SCRAPER_REGISTRY.keys())}"
+        )
+    
     # Get the scraper for this source
-    scraper = SexyFriendsTorontoScraper(db)
+    manager = ScraperManager(db)
+    scraper = manager.get_scraper(scraper_key)
+    if not scraper:
+        raise HTTPException(status_code=500, detail=f"Failed to initialize scraper for {source.name}")
+    
+    # Log which scraper class is being used
+    scraper_class_name = scraper.__class__.__name__
     
     try:
+        # Log the scraper being used for debugging
+        print(f"🔄 Starting scrape with {scraper_class_name} for profile_url='{listing.profile_url}'", flush=True)
+        sys.stdout.flush()
+        logging.info(f"🔄 Refreshing listing {listing_id} using {scraper_class_name} (source: {source.name}, key: {scraper_key})")
+        
         # Scrape the profile
         profile_data = await scraper.scrape_profile(listing.profile_url)
         
         if not profile_data:
             raise HTTPException(status_code=500, detail="Failed to scrape profile")
         
+        logging.info(f"✅ Successfully scraped profile data: {list(profile_data.keys())}")
+        
         # Update the listing with new values
         update_fields = ['tier', 'age', 'nationality', 'ethnicity', 'height', 'weight', 
                         'measurements', 'bust', 'bust_type', 'eye_color', 'hair_color', 
                         'service_type', 'images']
         
+        updated_count = 0
         for field in update_fields:
             if field in profile_data:
-                setattr(listing, field, profile_data[field])
+                old_value = getattr(listing, field, None)
+                new_value = profile_data[field]
+                
+                # Convert images list to JSON string if needed
+                if field == 'images' and isinstance(new_value, list):
+                    new_value = json.dumps(new_value) if new_value else None
+                    # Compare with existing JSON string
+                    try:
+                        old_value_parsed = json.loads(old_value) if old_value else []
+                    except (json.JSONDecodeError, TypeError):
+                        old_value_parsed = []
+                    if old_value_parsed == profile_data[field]:
+                        continue  # Skip if same
+                
+                if old_value != new_value:
+                    setattr(listing, field, new_value)
+                    updated_count += 1
+                    logging.debug(f"  Updated {field}: {old_value} -> {new_value}")
         
         listing.updated_at = datetime.now()
         db.commit()
         db.refresh(listing)
         
+        logging.info(f"✅ Updated {updated_count} fields for listing {listing_id}")
+        
         # Return the updated listing with tier rates
         tier_cache = get_tier_rates_cache(db)
-        return enrich_listing_with_tier_rates(listing, tier_cache)
+        result = enrich_listing_with_tier_rates(listing, tier_cache)
+        
+        # Add debug info to response (for development/debugging)
+        # This helps verify which scraper is being used
+        result['_debug_info'] = {
+            'scraper_used': scraper_class_name,
+            'source_name': source.name,
+            'scraper_key': scraper_key,
+            'fields_updated': updated_count
+        }
+        
+        return result
         
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error refreshing listing: {str(e)}")
+    finally:
+        # Clean up scraper resources if needed (e.g., DD scraper's browser)
+        if hasattr(scraper, 'crawler') and hasattr(scraper.crawler, 'close'):
+            try:
+                await scraper.crawler.close()
+            except Exception as cleanup_error:
+                # Log but don't fail the request if cleanup fails
+                logging.warning(f"Error cleaning up scraper resources: {cleanup_error}")
 
 
 @app.delete("/api/sources/{source_id}/data")

@@ -75,6 +75,7 @@ class StaticCrawler:
         Raises:
             httpx.HTTPError: On request failure after retries
         """
+        logger.debug(f"StaticCrawler fetching: {url}")
         await self._wait_for_rate_limit()
 
         last_error = None

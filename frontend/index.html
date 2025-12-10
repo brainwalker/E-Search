@@ -1435,14 +1435,30 @@
         async function refreshListing(listingId) {
             try {
                 showNotification('Refreshing...', 'info');
-                const response = await fetch(`${API_BASE}/api/listings/${listingId}`);
-                if (!response.ok) throw new Error('Failed');
+                console.log(`🔄 Refreshing listing ${listingId}...`);
+                const response = await fetch(`${API_BASE}/api/listings/${listingId}/refresh`, {
+                    method: 'POST'
+                });
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: 'Failed to refresh' }));
+                    console.error('❌ Refresh failed:', errorData);
+                    throw new Error(errorData.detail || 'Failed to refresh');
+                }
                 const updatedListing = await response.json();
+                console.log('✅ Refresh successful:', updatedListing);
+                
+                // Log which scraper was used if available
+                if (updatedListing._debug_info) {
+                    console.log(`📊 Scraper used: ${updatedListing._debug_info.scraper_used} (${updatedListing._debug_info.scraper_key})`);
+                    console.log(`📊 Source: ${updatedListing._debug_info.source_name}, Fields updated: ${updatedListing._debug_info.fields_updated}`);
+                }
+                
                 const card = document.querySelector(`[data-listing-id="${listingId}"]`);
                 if (card) card.replaceWith(createListingCard(updatedListing));
                 showNotification('Refreshed!', 'success');
             } catch (error) {
-                showNotification('Failed to refresh.', 'error');
+                console.error('❌ Refresh error:', error);
+                showNotification(error.message || 'Failed to refresh.', 'error');
             }
         }
 

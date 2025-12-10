@@ -171,12 +171,28 @@ class BaseScraper(ABC):
         """
         pass
 
-    def normalize_listing(self, schedule_item: ScheduleItem, profile_data: Dict) -> ScrapedListing:
+    def normalize_listing(self, schedule_item: ScheduleItem, profile_data: Dict, all_schedule_items: Optional[List[ScheduleItem]] = None) -> ScrapedListing:
         """
         Convert raw scraped data to standardized ScrapedListing.
 
         Override this method for site-specific normalization.
+        
+        Args:
+            schedule_item: First schedule item (for name, profile_url, tier)
+            profile_data: Scraped profile data
+            all_schedule_items: All schedule items for this profile (defaults to [schedule_item])
         """
+        if all_schedule_items is None:
+            all_schedule_items = [schedule_item]
+        
+        # Convert all schedule items to schedule dicts
+        schedules = [{
+            'day_of_week': item.day_of_week,
+            'location': item.location,
+            'start_time': item.start_time,
+            'end_time': item.end_time,
+        } for item in all_schedule_items]
+        
         return ScrapedListing(
             name=schedule_item.name,
             profile_url=schedule_item.profile_url,
@@ -195,12 +211,7 @@ class BaseScraper(ABC):
             service_type=profile_data.get('service_type'),
             images=profile_data.get('images', []),
             tags=profile_data.get('tags', []),
-            schedules=[{
-                'day_of_week': schedule_item.day_of_week,
-                'location': schedule_item.location,
-                'start_time': schedule_item.start_time,
-                'end_time': schedule_item.end_time,
-            }],
+            schedules=schedules,
             raw_data=profile_data,
         )
 
@@ -362,28 +373,29 @@ class BaseScraper(ABC):
             self.result.total = len(schedule_items)
             self.logger.info(f"Found {len(schedule_items)} schedule items")
 
-            # Deduplicate by profile URL to avoid scraping same profile multiple times
-            seen_profiles = {}
+            # Group schedule items by profile URL to collect all schedules per profile
+            profiles_schedules = {}
             for item in schedule_items:
-                if item.profile_url not in seen_profiles:
-                    seen_profiles[item.profile_url] = item
-                else:
-                    # Merge schedule into existing item's data
-                    pass  # We'll handle this in normalize_listing
+                if item.profile_url not in profiles_schedules:
+                    profiles_schedules[item.profile_url] = []
+                profiles_schedules[item.profile_url].append(item)
 
-            unique_profiles = list(seen_profiles.values())
+            unique_profiles = list(profiles_schedules.keys())
             self.logger.info(f"Processing {len(unique_profiles)} unique profiles")
 
             # Step 2: Process each listing
-            for idx, item in enumerate(unique_profiles, 1):
+            for idx, profile_url in enumerate(unique_profiles, 1):
                 try:
-                    self.logger.info(f"[{idx}/{len(unique_profiles)}] Scraping {item.name} ({item.profile_url})")
+                    # Get first schedule item for basic info (name, tier, etc.)
+                    schedule_items_for_profile = profiles_schedules[profile_url]
+                    first_item = schedule_items_for_profile[0]
+                    self.logger.info(f"[{idx}/{len(unique_profiles)}] Scraping {first_item.name} ({profile_url}) - {len(schedule_items_for_profile)} schedule(s)")
 
                     # Scrape profile
-                    profile_data = await self.scrape_profile(item.profile_url)
+                    profile_data = await self.scrape_profile(profile_url)
 
-                    # Normalize
-                    listing = self.normalize_listing(item, profile_data)
+                    # Normalize - pass all schedule items
+                    listing = self.normalize_listing(first_item, profile_data, schedule_items_for_profile)
 
                     # Save
                     is_new = await self.save_listing(listing)

@@ -7,7 +7,7 @@ It serves as a reference implementation for other static HTML scrapers.
 
 import re
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from bs4 import BeautifulSoup
 
 from ..base import BaseScraper, ScheduleItem, ScrapedListing
@@ -254,14 +254,26 @@ class SFTScraper(BaseScraper):
 
         return profile
 
-    def normalize_listing(self, schedule_item: ScheduleItem, profile_data: Dict) -> ScrapedListing:
+    def normalize_listing(self, schedule_item: ScheduleItem, profile_data: Dict, all_schedule_items: Optional[List[ScheduleItem]] = None) -> ScrapedListing:
         """
         Create ScrapedListing from schedule item and profile data.
 
         Uses schedule tier if available, falls back to profile tier.
+        Includes all schedules for this profile.
         """
+        if all_schedule_items is None:
+            all_schedule_items = [schedule_item]
+        
         # Prefer schedule tier over profile tier
         tier = schedule_item.tier or profile_data.get('tier')
+
+        # Convert all schedule items to schedule dicts
+        schedules = [{
+            'day_of_week': item.day_of_week,
+            'location': item.location,
+            'start_time': item.start_time,
+            'end_time': item.end_time,
+        } for item in all_schedule_items]
 
         return ScrapedListing(
             name=schedule_item.name,
@@ -281,11 +293,6 @@ class SFTScraper(BaseScraper):
             service_type=profile_data.get('service_type'),
             images=profile_data.get('images', []),
             tags=profile_data.get('tags', []),
-            schedules=[{
-                'day_of_week': schedule_item.day_of_week,
-                'location': schedule_item.location,
-                'start_time': schedule_item.start_time,
-                'end_time': schedule_item.end_time,
-            }],
+            schedules=schedules,
             raw_data=profile_data,
         )

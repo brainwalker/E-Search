@@ -128,11 +128,16 @@ def start_backend():
     # Start uvicorn
     print(f"Starting backend with: {venv_python}")
     with backend_lock:
+        # Write logs to file so they can be tailed
+        log_file = backend_dir.parent / 'logs' / 'backend.log'
+        log_file.parent.mkdir(exist_ok=True)
+        log_file_handle = open(log_file, 'a', buffering=1)  # Line buffered for real-time updates
+        
         backend_process = subprocess.Popen(
             [str(venv_python), '-m', 'uvicorn', 'api.main:app', '--host', '0.0.0.0', '--port', '8000', '--reload'],
             cwd=str(backend_dir),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stdout=log_file_handle,
+            stderr=subprocess.STDOUT
         )
 
     # Wait for server to start
