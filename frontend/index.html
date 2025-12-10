@@ -105,6 +105,60 @@
             color: var(--text-muted);
             margin-bottom: 10px;
             font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .select-all-btn {
+            font-size: 0.7rem;
+            padding: 3px 8px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-muted);
+            cursor: pointer;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        .select-all-btn:hover {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .filter-row select {
+            flex: 1;
+        }
+
+        .toggle-compact {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .toggle-label-small {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .btn-sm {
+            padding: 8px 12px;
+            font-size: 0.8rem;
         }
 
         /* Sidebar Toggle */
@@ -445,6 +499,50 @@
             border-color: var(--accent-primary);
         }
 
+        .listing-card {
+            will-change: transform, box-shadow;
+        }
+
+        /* Loading skeleton */
+        .skeleton {
+            background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 8px;
+        }
+
+        .skeleton-card {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            padding: 16px;
+        }
+
+        .skeleton-header {
+            height: 60px;
+            margin-bottom: 16px;
+        }
+
+        .skeleton-image {
+            height: 180px;
+            margin-bottom: 12px;
+        }
+
+        .skeleton-line {
+            height: 16px;
+            margin-bottom: 8px;
+        }
+
+        .skeleton-line.short {
+            width: 60%;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
         .listing-actions {
             position: absolute;
             top: 10px;
@@ -514,6 +612,16 @@
             object-fit: cover;
             border-radius: 8px;
             margin-bottom: 12px;
+            background: var(--bg-tertiary);
+        }
+
+        .listing-thumbnail[data-src] {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .listing-thumbnail.loaded {
+            opacity: 1;
         }
 
         .listing-detail {
@@ -935,23 +1043,16 @@
             </div>
             
             <div class="sidebar-content">
+                <!-- Search at top for quick access -->
                 <div class="sidebar-section">
-                    <div class="sidebar-section-title">Sources</div>
-                    <div class="source-buttons" id="sourcesButtons">
-                        <!-- Populated dynamically -->
-                    </div>
-                </div>
-
-                <div class="sidebar-section">
-                    <div class="sidebar-section-title">Search</div>
                     <div class="filter-group">
                         <input type="text" id="searchInput" placeholder="Search by name..." oninput="debounceSearch()">
                     </div>
                 </div>
 
+                <!-- Filters row -->
                 <div class="sidebar-section">
-                    <div class="sidebar-section-title">Tier</div>
-                    <div class="filter-group">
+                    <div class="filter-row">
                         <select id="tierFilter" onchange="loadListings()">
                             <option value="">All Tiers</option>
                             <option value="Elite">Elite</option>
@@ -959,26 +1060,28 @@
                             <option value="Ultra VIP">Ultra VIP</option>
                             <option value="Platinum VIP">Platinum VIP</option>
                         </select>
+                        <div class="toggle-compact">
+                            <div class="toggle-switch" id="hideExpiredToggle" onclick="toggleHideExpired()"></div>
+                            <span class="toggle-label-small">Expired</span>
+                        </div>
                     </div>
                 </div>
 
+                <!-- Sources filter -->
                 <div class="sidebar-section">
-                    <div class="sidebar-section-title">Options</div>
-                    <div class="toggle-row">
-                        <div class="toggle-switch" id="hideExpiredToggle" onclick="toggleHideExpired()"></div>
-                        <span class="toggle-label" onclick="toggleHideExpired()">Hide Expired</span>
+                    <div class="sidebar-section-title">
+                        <span>Sources</span>
+                        <button class="select-all-btn" onclick="toggleAllSources()">Toggle All</button>
+                    </div>
+                    <div class="source-buttons" id="sourcesButtons">
+                        <!-- Populated dynamically -->
                     </div>
                 </div>
 
-                <div class="sidebar-section">
-                    <button class="btn btn-primary btn-block" onclick="applyFilters()">
-                        🔍 Apply Filters
-                    </button>
-                    <button class="btn btn-secondary btn-block" onclick="clearFilters()" style="margin-top: 8px;">
-                        ✕ Clear All
-                    </button>
-                    <button class="btn btn-success btn-block" onclick="scrapeAllSources()" style="margin-top: 8px;">
-                        🔄 Scrape Sources
+                <!-- Clear button at bottom -->
+                <div class="sidebar-section sidebar-footer">
+                    <button class="btn btn-secondary btn-block btn-sm" onclick="clearFilters()">
+                        Clear Filters
                     </button>
                 </div>
             </div>
@@ -1050,6 +1153,68 @@
         let allSources = [];
         let hideExpired = false;
 
+        // Request management
+        let listingsAbortController = null;
+        const requestCache = new Map();
+        const CACHE_TTL = 30000; // 30 seconds
+
+        // Lazy loading observer
+        let imageObserver = null;
+
+        // Initialize lazy loading
+        function initLazyLoading() {
+            if ('IntersectionObserver' in window) {
+                imageObserver = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const img = entry.target;
+                            if (img.dataset.src) {
+                                img.src = img.dataset.src;
+                                img.onload = () => img.classList.add('loaded');
+                                img.onerror = () => img.style.display = 'none';
+                                delete img.dataset.src;
+                                imageObserver.unobserve(img);
+                            }
+                        }
+                    });
+                }, { rootMargin: '100px' });
+            }
+        }
+
+        // Cache helpers
+        function getCached(key) {
+            const cached = requestCache.get(key);
+            if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+                return cached.data;
+            }
+            requestCache.delete(key);
+            return null;
+        }
+
+        function setCache(key, data) {
+            requestCache.set(key, { data, timestamp: Date.now() });
+        }
+
+        function invalidateCache(pattern) {
+            for (const key of requestCache.keys()) {
+                if (key.includes(pattern)) {
+                    requestCache.delete(key);
+                }
+            }
+        }
+
+        // Generate skeleton loading cards
+        function getSkeletonCards(count = 6) {
+            return Array(count).fill(0).map(() => `
+                <div class="skeleton-card">
+                    <div class="skeleton skeleton-header"></div>
+                    <div class="skeleton skeleton-image"></div>
+                    <div class="skeleton skeleton-line"></div>
+                    <div class="skeleton skeleton-line short"></div>
+                </div>
+            `).join('');
+        }
+
         // Get current day of week
         function getCurrentDayOfWeek() {
             const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -1101,6 +1266,8 @@
 
         // Initialize
         async function init() {
+            initLazyLoading();
+
             const isBackendRunning = await checkBackendStatus();
             if (!isBackendRunning) {
                 showBackendOfflineMessage();
@@ -1108,8 +1275,7 @@
             }
 
             initDayButtons();
-            await loadStats();
-            await loadSources();
+            await Promise.all([loadStats(), loadSources()]);
             await loadListings();
         }
 
@@ -1199,7 +1365,15 @@
 
         async function loadListings() {
             const container = document.getElementById('listingsContainer');
-            container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Loading...</p></div>';
+
+            // Cancel any pending request
+            if (listingsAbortController) {
+                listingsAbortController.abort();
+            }
+            listingsAbortController = new AbortController();
+
+            // Show skeleton loading
+            container.innerHTML = `<div class="listings-grid">${getSkeletonCards(6)}</div>`;
 
             try {
                 const params = new URLSearchParams();
@@ -1216,15 +1390,23 @@
 
                 // Other filters
                 if (hideExpired) params.append('hide_expired', 'true');
-                
+
                 const search = document.getElementById('searchInput').value.trim();
                 if (search) params.append('search', search);
-                
+
                 const tier = document.getElementById('tierFilter').value;
                 if (tier) params.append('tier', tier);
 
-                const response = await fetch(`${API_BASE}/api/listings?${params}`);
-                const listings = await response.json();
+                const cacheKey = `listings:${params.toString()}`;
+                let listings = getCached(cacheKey);
+
+                if (!listings) {
+                    const response = await fetch(`${API_BASE}/api/listings?${params}`, {
+                        signal: listingsAbortController.signal
+                    });
+                    listings = await response.json();
+                    setCache(cacheKey, listings);
+                }
 
                 if (listings.length === 0) {
                     container.innerHTML = '<div class="no-results">No listings found.</div>';
@@ -1234,13 +1416,24 @@
                 const grid = document.createElement('div');
                 grid.className = 'listings-grid';
 
+                // Use DocumentFragment for better performance
+                const fragment = document.createDocumentFragment();
                 listings.forEach(listing => {
-                    grid.appendChild(createListingCard(listing));
+                    fragment.appendChild(createListingCard(listing));
                 });
+                grid.appendChild(fragment);
 
                 container.innerHTML = '';
                 container.appendChild(grid);
+
+                // Observe images for lazy loading
+                if (imageObserver) {
+                    grid.querySelectorAll('.listing-thumbnail[data-src]').forEach(img => {
+                        imageObserver.observe(img);
+                    });
+                }
             } catch (error) {
+                if (error.name === 'AbortError') return; // Ignore aborted requests
                 console.error('Error:', error);
                 container.innerHTML = '<div class="no-results">Error loading listings.</div>';
             }
@@ -1253,8 +1446,8 @@
             card.onclick = () => openListingModal(listing);
 
             const images = getFullImageUrls(listing);
-            const imageHtml = images.length > 0 
-                ? `<img src="${images[0]}" class="listing-thumbnail" alt="${listing.name}" onerror="this.style.display='none'">`
+            const imageHtml = images.length > 0
+                ? `<img data-src="${images[0]}" class="listing-thumbnail" alt="${listing.name}">`
                 : '';
 
             let ratesHtml = '';
@@ -1349,87 +1542,11 @@
             loadListings();
         }
 
-        // Map source names to API endpoint names
-        function getSourceApiName(sourceName) {
-            // Validate input - handle undefined, null, or non-string values
-            if (!sourceName || typeof sourceName !== 'string') {
-                console.warn('getSourceApiName: Invalid sourceName provided', sourceName);
-                return 'unknown'; // Return a safe default
-            }
-            
-            const nameLower = sourceName.toLowerCase();
-            // Map common source names to API endpoint names
-            if (nameLower.includes('sexyfriendstoronto') || nameLower.includes('sft')) {
-                return 'sft';
-            }
-            if (nameLower.includes('discreet') || nameLower.includes('dd')) {
-                return 'dd';
-            }
-            // Default: use lowercase name with spaces replaced
-            return nameLower.replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
-        }
-
-        async function scrapeAllSources() {
-            // Get selected sources
-            const selectedSourceButtons = Array.from(document.querySelectorAll('#sourcesButtons .source-btn.active'));
-            
-            if (selectedSourceButtons.length === 0) {
-                showNotification('Please select at least one source to scrape.', 'error');
-                return;
-            }
-
-            const sourceNames = selectedSourceButtons.map(btn => btn.dataset.sourceName);
-            showNotification(`Scraping ${sourceNames.length} source(s)...`, 'info');
-            
-            try {
-                const results = [];
-                const errors = [];
-                
-                // Scrape each selected source
-                for (const btn of selectedSourceButtons) {
-                    const sourceName = btn.dataset.sourceName;
-                    
-                    // Skip sources without a valid name
-                    if (!sourceName || sourceName === 'undefined' || sourceName === 'null') {
-                        errors.push({ source: sourceName || 'Unknown', error: 'Source name is missing or invalid' });
-                        continue;
-                    }
-                    
-                    const apiName = getSourceApiName(sourceName);
-                    
-                    // Skip if API name couldn't be determined
-                    if (!apiName || apiName === 'unknown') {
-                        errors.push({ source: sourceName, error: 'Could not determine API endpoint name' });
-                        continue;
-                    }
-                    
-                    try {
-                        const response = await fetch(`${API_BASE}/api/scrape/${apiName}`, { method: 'POST' });
-                        if (!response.ok) {
-                            throw new Error(`HTTP ${response.status}`);
-                        }
-                        const result = await response.json();
-                        results.push({ source: sourceName, success: true, result });
-                    } catch (error) {
-                        errors.push({ source: sourceName, error: error.message });
-                    }
-                }
-                
-                if (errors.length > 0) {
-                    const errorMsg = errors.length === selectedSourceButtons.length 
-                        ? 'All scrapes failed.' 
-                        : `${errors.length} of ${selectedSourceButtons.length} scrapes failed.`;
-                    showNotification(errorMsg, 'error');
-                } else {
-                    showNotification(`Successfully scraped ${results.length} source(s)!`, 'success');
-                }
-                
-                await loadStats();
-                await loadListings();
-            } catch (error) {
-                showNotification('Scraping failed.', 'error');
-                console.error('Scraping error:', error);
-            }
+        function toggleAllSources() {
+            const buttons = document.querySelectorAll('#sourcesButtons .source-btn');
+            const allActive = Array.from(buttons).every(btn => btn.classList.contains('active'));
+            buttons.forEach(btn => btn.classList.toggle('active', !allActive));
+            loadListings();
         }
 
         async function refreshListing(listingId) {
@@ -1446,15 +1563,24 @@
                 }
                 const updatedListing = await response.json();
                 console.log('✅ Refresh successful:', updatedListing);
-                
+
                 // Log which scraper was used if available
                 if (updatedListing._debug_info) {
                     console.log(`📊 Scraper used: ${updatedListing._debug_info.scraper_used} (${updatedListing._debug_info.scraper_key})`);
                     console.log(`📊 Source: ${updatedListing._debug_info.source_name}, Fields updated: ${updatedListing._debug_info.fields_updated}`);
                 }
-                
+
+                // Invalidate cache to get fresh data
+                invalidateCache('listings');
+
                 const card = document.querySelector(`[data-listing-id="${listingId}"]`);
-                if (card) card.replaceWith(createListingCard(updatedListing));
+                if (card) {
+                    const newCard = createListingCard(updatedListing);
+                    card.replaceWith(newCard);
+                    // Observe new image for lazy loading
+                    const img = newCard.querySelector('.listing-thumbnail[data-src]');
+                    if (img && imageObserver) imageObserver.observe(img);
+                }
                 showNotification('Refreshed!', 'success');
             } catch (error) {
                 console.error('❌ Refresh error:', error);
@@ -1467,6 +1593,10 @@
             try {
                 const response = await fetch(`${API_BASE}/api/listings/${listingId}`, { method: 'DELETE' });
                 if (!response.ok) throw new Error('Failed');
+
+                // Invalidate cache
+                invalidateCache('listings');
+
                 const card = document.querySelector(`[data-listing-id="${listingId}"]`);
                 if (card) {
                     card.style.transition = 'all 0.3s';
@@ -1605,10 +1735,15 @@
         }
 
         document.addEventListener('keydown', function(event) {
-            if (document.getElementById('imageViewer').style.display === 'flex') {
+            const imageViewer = document.getElementById('imageViewer');
+            const listingModal = document.getElementById('listingModal');
+
+            if (imageViewer.style.display === 'flex') {
                 if (event.key === 'ArrowLeft') navigateImage(-1);
                 else if (event.key === 'ArrowRight') navigateImage(1);
                 else if (event.key === 'Escape') closeImageViewer();
+            } else if (listingModal.classList.contains('show')) {
+                if (event.key === 'Escape') closeModal();
             }
         });
 
@@ -1643,6 +1778,14 @@
                 await loadStats();
                 await loadListings();
             }
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+            if (imageObserver) imageObserver.disconnect();
+            if (listingsAbortController) listingsAbortController.abort();
+            requestCache.clear();
         });
 
         init();
