@@ -362,9 +362,23 @@ class BaseScraper(ABC):
             self.result.total = len(schedule_items)
             self.logger.info(f"Found {len(schedule_items)} schedule items")
 
-            # Step 2: Process each listing
+            # Deduplicate by profile URL to avoid scraping same profile multiple times
+            seen_profiles = {}
             for item in schedule_items:
+                if item.profile_url not in seen_profiles:
+                    seen_profiles[item.profile_url] = item
+                else:
+                    # Merge schedule into existing item's data
+                    pass  # We'll handle this in normalize_listing
+
+            unique_profiles = list(seen_profiles.values())
+            self.logger.info(f"Processing {len(unique_profiles)} unique profiles")
+
+            # Step 2: Process each listing
+            for idx, item in enumerate(unique_profiles, 1):
                 try:
+                    self.logger.info(f"[{idx}/{len(unique_profiles)}] Scraping {item.name} ({item.profile_url})")
+
                     # Scrape profile
                     profile_data = await self.scrape_profile(item.profile_url)
 
@@ -379,6 +393,10 @@ class BaseScraper(ABC):
                     else:
                         self.result.updated += 1
 
+                    # Progress update every 5 profiles
+                    if idx % 5 == 0:
+                        self.logger.info(f"Progress: {idx}/{len(unique_profiles)} profiles scraped")
+
                 except Exception as e:
                     self.result.errors += 1
                     self.result.error_details.append({
@@ -386,10 +404,12 @@ class BaseScraper(ABC):
                         'error': str(e),
                     })
                     self.logger.error(f"Error scraping {item.profile_url}: {e}")
+                    # Continue to next profile instead of failing entire scrape
 
             self.result.completed_at = datetime.utcnow()
+            duration = self.result.duration_seconds or 0
             self.logger.info(
-                f"Scrape complete: {self.result.new} new, "
+                f"✅ Scrape complete in {duration:.1f}s: {self.result.new} new, "
                 f"{self.result.updated} updated, {self.result.errors} errors"
             )
 

@@ -1596,7 +1596,41 @@
             }
         });
 
+        // Auto-refresh listings every 30 seconds
+        let autoRefreshInterval = null;
+        let lastListingCount = 0;
+
+        function startAutoRefresh() {
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+            autoRefreshInterval = setInterval(async () => {
+                try {
+                    // Check if new listings exist by comparing counts
+                    const response = await fetch(`${API_BASE}/api/stats`, { signal: AbortSignal.timeout(5000) });
+                    if (response.ok) {
+                        const stats = await response.json();
+                        if (stats.total_listings !== lastListingCount) {
+                            lastListingCount = stats.total_listings;
+                            await loadStats();
+                            await loadListings();
+                            console.log('🔄 Auto-refreshed listings');
+                        }
+                    }
+                } catch (error) {
+                    console.debug('Auto-refresh check failed:', error);
+                }
+            }, 30000); // 30 seconds
+        }
+
+        // Refresh when tab becomes visible
+        document.addEventListener('visibilitychange', async () => {
+            if (!document.hidden) {
+                await loadStats();
+                await loadListings();
+            }
+        });
+
         init();
+        startAutoRefresh();
     </script>
 </body>
 </html>

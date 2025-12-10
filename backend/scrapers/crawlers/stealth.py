@@ -30,10 +30,11 @@ class StealthCrawler:
 
     def __init__(
         self,
-        rate_limit: float = 3.0,
-        timeout: float = 30.0,
+        rate_limit: float = 1.5,  # Reduced from 3.0 for faster scraping
+        timeout: float = 20.0,    # Reduced from 30.0
         headless: bool = True,
-        max_retries: int = 3
+        max_retries: int = 3,
+        reuse_page: bool = True   # Reuse page instead of creating new ones
     ):
         """
         Initialize the stealth crawler.
@@ -43,26 +44,60 @@ class StealthCrawler:
             timeout: Request timeout in seconds
             headless: Run browser in headless mode
             max_retries: Number of retries on failure
+            reuse_page: If True, reuse the same page for multiple requests (faster)
         """
         self.rate_limit = rate_limit
         self.timeout = timeout
         self.headless = headless
         self.max_retries = max_retries
+        self.reuse_page = reuse_page
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
+        self._page: Optional[Page] = None  # Reusable page
         self._playwright = None
         self._last_request_time = 0
+        self._request_count = 0  # Track requests for periodic browser refresh
 
     async def _wait_for_rate_limit(self):
         """Wait to respect rate limit with some randomization."""
         import time
         now = time.time()
         elapsed = now - self._last_request_time
-        # Add small random delay to appear more human-like
-        wait_time = self.rate_limit - elapsed + random.uniform(0, 0.5)
+        # Add small random delay to appear more human-like (reduced randomization)
+        wait_time = self.rate_limit - elapsed + random.uniform(0, 0.3)
         if wait_time > 0:
             await asyncio.sleep(wait_time)
         self._last_request_time = time.time()
+
+    async def _get_or_create_page(self) -> Page:
+        """Get reusable page or create a new one."""
+        if self.reuse_page and self._page:
+            try:
+                # Check if page is still usable
+                _ = self._page.url
+                return self._page
+            except Exception:
+                self._page = None
+
+        # Create new page
+        page = await asyncio.wait_for(
+            self._context.new_page(),
+            timeout=10.0
+        )
+        if self.reuse_page:
+            self._page = page
+        return page
+
+    async def _maybe_refresh_browser(self):
+        """Periodically refresh browser to prevent memory leaks and crashes."""
+        self._request_count += 1
+        # Refresh browser every 30 requests to prevent memory buildup
+        if self._request_count >= 30:
+            logger.info("Refreshing browser after 30 requests...")
+            self._request_count = 0
+            await self._cleanup()
+            await asyncio.sleep(1)
+            await self._init_browser()
 
     async def _init_browser(self):
         """Initialize browser and context if not already done."""
@@ -203,6 +238,12 @@ class StealthCrawler:
 
     async def _cleanup(self):
         """Clean up browser resources."""
+        if self._page:
+            try:
+                await self._page.close()
+            except Exception as e:
+                logger.debug(f"Error closing page: {e}")
+            self._page = None
         if self._context:
             try:
                 await self._context.close()
@@ -287,7 +328,7 @@ class StealthCrawler:
         self,
         url: str,
         wait_selector: Optional[str] = None,
-        wait_time: float = 2.0,
+        wait_time: float = 0.8,  # Reduced from 2.0 for faster scraping
         cookies: Optional[Dict[str, str]] = None
     ) -> str:
         """
@@ -308,8 +349,11 @@ class StealthCrawler:
         await self._wait_for_rate_limit()
         await self._init_browser()
         await self._reinit_browser_if_needed()
+        await self._maybe_refresh_browser()
 
         last_error = None
+        page_was_reused = False
+
         for attempt in range(self.max_retries):
             page: Optional[Page] = None
             try:
@@ -317,117 +361,88 @@ class StealthCrawler:
                 if not await self._check_context_valid():
                     logger.warning(f"Context invalid before attempt {attempt + 1}, reinitializing...")
                     await self._reinit_browser_if_needed()
-                
+
                 # Verify context is still valid after reinit
                 if not await self._check_context_valid():
                     raise Exception("Failed to initialize browser context")
-                
-                # Clean up any orphaned pages before creating new one
+
+                # Get or create page (reuse if enabled)
                 try:
-                    existing_pages = self._context.pages
-                    # Close pages that might be stuck (keep max 2 open)
-                    if len(existing_pages) > 2:
-                        for old_page in existing_pages[:-2]:
-                            try:
-                                await old_page.close()
-                            except:
-                                pass
-                except:
-                    pass  # If we can't check pages, context might be dead
-                
-                # Create page with timeout protection
-                try:
-                    page = await asyncio.wait_for(
-                        self._context.new_page(),
-                        timeout=10.0
-                    )
+                    page = await self._get_or_create_page()
+                    page_was_reused = self.reuse_page and self._page is not None
                 except asyncio.TimeoutError:
                     raise Exception("Timeout creating new page - browser may be unresponsive")
-                
-                try:
-                    # Set cookies if provided
-                    if cookies:
-                        try:
-                            domain = self._extract_domain(url)
-                            await self._context.add_cookies([
-                                {'name': k, 'value': v, 'url': url, 'domain': domain}
-                                for k, v in cookies.items()
-                            ])
-                        except Exception as e:
-                            logger.warning(f"Failed to set cookies: {e}")
-                    
-                    # Navigate to page with increased timeout
-                    response = await page.goto(
-                        url,
-                        wait_until='domcontentloaded',
-                        timeout=int(self.timeout * 1000)
-                    )
-                    
-                    if response and response.status >= 400:
-                        raise Exception(f"HTTP {response.status} for {url}")
-                    
-                    # Wait for selector if specified
-                    if wait_selector:
-                        try:
-                            await page.wait_for_selector(wait_selector, timeout=10000)
-                        except Exception as e:
-                            logger.warning(f"Selector {wait_selector} not found: {e}")
-                    
-                    # Wait a bit for JavaScript to execute
-                    await asyncio.sleep(wait_time)
-                    
-                    # Simulate human-like behavior (scroll)
-                    try:
-                        await page.evaluate("""
-                            window.scrollTo(0, document.body.scrollHeight / 3);
-                        """)
-                        await asyncio.sleep(0.5)
-                        await page.evaluate("""
-                            window.scrollTo(0, document.body.scrollHeight);
-                        """)
-                        await asyncio.sleep(0.3)
-                    except Exception as e:
-                        logger.warning(f"Error during scroll simulation: {e}")
-                    
-                    # Get page content
-                    content = await page.content()
-                    return content
 
-                finally:
-                    # Always close page, even on error
-                    if page:
-                        try:
-                            await asyncio.wait_for(page.close(), timeout=5.0)
-                        except Exception as e:
-                            logger.warning(f"Error closing page: {e}")
-                            # If page close fails, context might be dead
-                            if 'connection' in str(e).lower() or 'closed' in str(e).lower():
-                                self._context = None
+                # Set cookies if provided (only on first use or new page)
+                if cookies and not page_was_reused:
+                    try:
+                        domain = self._extract_domain(url)
+                        await self._context.add_cookies([
+                            {'name': k, 'value': v, 'url': url, 'domain': domain}
+                            for k, v in cookies.items()
+                        ])
+                    except Exception as e:
+                        logger.warning(f"Failed to set cookies: {e}")
+
+                # Navigate to page
+                response = await page.goto(
+                    url,
+                    wait_until='domcontentloaded',
+                    timeout=int(self.timeout * 1000)
+                )
+
+                if response and response.status >= 400:
+                    raise Exception(f"HTTP {response.status} for {url}")
+
+                # Wait for selector if specified
+                if wait_selector:
+                    try:
+                        await page.wait_for_selector(wait_selector, timeout=8000)
+                    except Exception as e:
+                        logger.debug(f"Selector {wait_selector} not found: {e}")
+
+                # Brief wait for JavaScript to execute (reduced for speed)
+                await asyncio.sleep(wait_time)
+
+                # Light scroll to trigger lazy loading (faster than before)
+                try:
+                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+                    await asyncio.sleep(0.2)
+                except Exception:
+                    pass  # Scroll is optional, don't fail on it
+
+                # Get page content
+                content = await page.content()
+                return content
 
             except Exception as e:
                 last_error = e
-                
-                # Ensure page is closed even if we didn't get to finally block
-                if page:
+
+                # If using reusable page and it failed, clear it
+                if self.reuse_page:
+                    self._page = None
+
+                # Close page if we created it and it's not reusable
+                if page and not page_was_reused:
                     try:
                         await page.close()
                     except:
                         pass
-                
+
                 # Check if error is due to closed context/browser
                 error_str = str(e).lower()
-                if any(keyword in error_str for keyword in ['connection closed', 'context', 'browser', 'driver']):
+                if any(keyword in error_str for keyword in ['connection closed', 'context', 'browser', 'driver', 'target closed']):
                     logger.warning(f"Browser/context issue detected on attempt {attempt + 1}, will reinitialize")
-                    # Mark context as invalid to force reinit
+                    self._page = None
                     self._context = None
                     self._browser = None
-                
+
                 logger.warning(f"Attempt {attempt + 1}/{self.max_retries} failed for {url}: {e}")
                 if attempt < self.max_retries - 1:
                     # Reinitialize browser if context was closed
                     await self._reinit_browser_if_needed()
-                    # Longer backoff for connection issues
-                    backoff_time = min(2 ** attempt, 5)  # Cap at 5 seconds
+                    # Shorter backoff for faster recovery
+                    backoff_time = min(1.5 ** attempt, 3)  # Cap at 3 seconds
                     await asyncio.sleep(backoff_time)
 
         raise last_error or Exception(f"Failed to fetch {url} after {self.max_retries} attempts")

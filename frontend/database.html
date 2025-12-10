@@ -922,6 +922,7 @@
         let logsPaused = false;
         let logsUpdateInterval = null;
         let lastLogTimestamp = null;
+        let logsAbortController = null;
 
         // Utility function to escape HTML
         function escapeHtml(text) {
@@ -935,8 +936,7 @@
         async function init() {
             console.log('🔄 Initializing database viewer...');
             await refreshDatabase();
-            await loadLogs();
-            startLogsAutoUpdate();
+            // Note: refreshDatabase() already calls loadLogs() and startLogsAutoUpdate()
             initSidebarResizer();
         }
 
@@ -1410,21 +1410,26 @@
             if (!backendOnline) {
                 return;
             }
-            
+
+            // Cancel any in-flight request
+            if (logsAbortController) {
+                logsAbortController.abort();
+            }
+
             try {
-                const url = lastLogTimestamp 
+                const url = lastLogTimestamp
                     ? `${API_BASE}/db/logs?lines=200&since=${encodeURIComponent(lastLogTimestamp)}`
                     : `${API_BASE}/db/logs?lines=200`;
-                
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-                
+
+                logsAbortController = new AbortController();
+                const timeoutId = setTimeout(() => logsAbortController.abort(), 5000); // 5 second timeout
+
                 const response = await fetch(url, {
                     cache: 'no-cache',
                     headers: { 'Cache-Control': 'no-cache' },
-                    signal: controller.signal
+                    signal: logsAbortController.signal
                 });
-                
+
                 clearTimeout(timeoutId);
 
                 if (!response.ok) {
@@ -1483,6 +1488,10 @@
                     }
                 }
             } catch (error) {
+                // Ignore abort errors (from timeout or cancelled requests)
+                if (error.name === 'AbortError') {
+                    return;
+                }
                 // Only log error if it's not a connection refused (backend is down)
                 if (!error.message.includes('Failed to fetch') && !error.message.includes('ERR_CONNECTION_REFUSED')) {
                     console.error('Error loading logs:', error);
@@ -1876,6 +1885,42 @@
         });
 
         window.addEventListener('beforeunload', stopLogsAutoUpdate);
+
+        // Auto-refresh stats every 15 seconds to show new listings
+        let statsAutoRefreshInterval = null;
+        let lastStatsSnapshot = null;
+
+        function startStatsAutoRefresh() {
+            if (statsAutoRefreshInterval) clearInterval(statsAutoRefreshInterval);
+            statsAutoRefreshInterval = setInterval(async () => {
+                if (!backendOnline || isRefreshing) return;
+                try {
+                    const response = await fetch(`${API_BASE}/db/stats`, {
+                        signal: AbortSignal.timeout(5000),
+                        cache: 'no-cache'
+                    });
+                    if (response.ok) {
+                        const stats = await response.json();
+                        const currentSnapshot = JSON.stringify(stats);
+                        if (lastStatsSnapshot && currentSnapshot !== lastStatsSnapshot) {
+                            // Stats changed, refresh the UI
+                            console.log('📊 Stats changed, refreshing...');
+                            await loadStats();
+                            // If viewing listings table, refresh it too
+                            if (currentTable === 'listings') {
+                                await loadTable('listings', currentPage);
+                            }
+                        }
+                        lastStatsSnapshot = currentSnapshot;
+                    }
+                } catch (error) {
+                    // Silently fail - don't disrupt user
+                }
+            }, 15000); // 15 seconds
+        }
+
+        // Start auto-refresh after init
+        setTimeout(startStatsAutoRefresh, 2000);
     </script>
 </body>
 </html>

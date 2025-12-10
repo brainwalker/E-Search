@@ -12,6 +12,7 @@ Site structure:
 import re
 import json
 import html
+import logging
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -26,6 +27,9 @@ from ..utils.normalizers import (
     normalize_measurements,
     normalize_bust_size,
 )
+
+# Module-level logger for DD scraper
+dd_logger = logging.getLogger("scraper.DD")
 
 
 # DD location mapping: known location suffixes and their town prefixes
@@ -57,7 +61,7 @@ def normalize_dd_tier(tier: str) -> Optional[str]:
     return DD_TIER_MAP.get(tier_lower, tier.strip().title())
 
 
-def parse_dd_location(location_str: str) -> Tuple[str, str]:
+def parse_dd_location(location_str: str) -> Tuple[Optional[str], Optional[str]]:
     """
     Parse DD location string into town and location.
 
@@ -65,14 +69,19 @@ def parse_dd_location(location_str: str) -> Tuple[str, str]:
         "Downtown Richmond-Peter" -> ("Downtown", "Richmond-Peter")
         "Etobicoke HWY427-Bloor" -> ("Etobicoke", "HWY427-Bloor")
         "North York" -> ("North York", "unknown")
+        "Outcall" -> (None, None)  # Skip outcall
 
     Returns:
-        Tuple of (town, location)
+        Tuple of (town, location) or (None, None) for Outcall
     """
     if not location_str:
         return ("unknown", "unknown")
 
     location_str = location_str.strip()
+
+    # Skip Outcall locations
+    if location_str.lower() == 'outcall' or 'outcall' in location_str.lower():
+        return (None, None)
 
     # Check for known location patterns
     for loc_suffix, expected_town in DD_LOCATION_PATTERNS.items():
@@ -169,8 +178,11 @@ class DDScraper(BaseScraper):
         config = get_site_config('discreet')
         super().__init__(config, db_session)
         self.crawler = StealthCrawler(
-            rate_limit=config.rate_limit_seconds,
-            headless=True
+            rate_limit=1.5,  # Faster rate limit (was using config which was 3.0)
+            headless=True,
+            reuse_page=True,  # Reuse browser page for speed
+            timeout=20.0,
+            max_retries=2  # Fewer retries to avoid hanging
         )
         self._crawler_initialized = False
 
@@ -207,11 +219,12 @@ class DDScraper(BaseScraper):
     def _parse_schedule(self, soup: BeautifulSoup) -> List[ScheduleItem]:
         """Parse the schedule page HTML with data-doll-info JSON."""
         items = []
+        seen_profiles = set()  # Track unique profiles to avoid duplicates
 
         # Find all card elements with data-doll-info
         cards = soup.find_all('a', class_='card', attrs={'data-doll-info': True})
 
-        self.logger.info(f"Found {len(cards)} escort cards")
+        self.logger.info(f"Found {len(cards)} escort cards on schedule page")
 
         for card in cards:
             try:
@@ -271,6 +284,11 @@ class DDScraper(BaseScraper):
                             day_of_week = parse_dd_date(date_str)
                             town, location = parse_dd_location(location_str)
 
+                            # Skip if Outcall (town is None)
+                            if town is None:
+                                self.logger.debug(f"Skipping Outcall schedule for {name}")
+                                continue
+
                             if day_of_week:
                                 items.append(ScheduleItem(
                                     name=normalize_name(name),
@@ -281,6 +299,7 @@ class DDScraper(BaseScraper):
                                     end_time=end_time,
                                     tier=tier,
                                 ))
+                                seen_profiles.add(profile_slug)
                 else:
                     # Use date_location from JSON
                     for date_loc in date_locations:
@@ -290,6 +309,11 @@ class DDScraper(BaseScraper):
 
                             day_of_week = parse_dd_date(date_str)
                             town, location = parse_dd_location(location_str)
+
+                            # Skip if Outcall (town is None)
+                            if town is None:
+                                self.logger.debug(f"Skipping Outcall schedule for {name}")
+                                continue
 
                             # Try to get time from bline
                             start_time, end_time = None, None
@@ -315,15 +339,13 @@ class DDScraper(BaseScraper):
                                     end_time=end_time,
                                     tier=tier,
                                 ))
-
-                # Store additional data from doll_info for profile scraping
-                # This will be used in scrape_profile to avoid redundant extraction
+                                seen_profiles.add(profile_slug)
 
             except Exception as e:
                 self.logger.error(f"Error parsing card: {e}")
                 continue
 
-        self.logger.info(f"Parsed {len(items)} schedule items")
+        self.logger.info(f"Parsed {len(items)} schedule items for {len(seen_profiles)} unique escorts")
         return items
 
     async def scrape_profile(self, profile_url: str) -> Dict[str, Any]:
@@ -338,10 +360,16 @@ class DDScraper(BaseScraper):
         """
         await self._ensure_crawler()
         full_url = f"{self.config.base_url}{profile_url}/"
-        self.logger.debug(f"Fetching profile: {full_url}")
+        self.logger.info(f"📍 Scraping profile: {profile_url}")
 
         soup = await self.crawler.fetch_soup(full_url)
-        return self._parse_profile(soup)
+        profile = self._parse_profile(soup, profile_url)
+
+        # Log extracted data
+        extracted = [k for k, v in profile.items() if v]
+        self.logger.info(f"   ✓ {profile_url}: extracted {', '.join(extracted) if extracted else 'no data'}")
+
+        return profile
 
     async def run(self):
         """Override run to ensure crawler cleanup."""
@@ -357,16 +385,17 @@ class DDScraper(BaseScraper):
             finally:
                 self._crawler_initialized = False
 
-    def _parse_profile(self, soup: BeautifulSoup) -> Dict[str, Any]:
+    def _parse_profile(self, soup: BeautifulSoup, profile_slug: str = "") -> Dict[str, Any]:
         """Parse profile page HTML."""
         profile = {}
 
-        # Find stats table
+        # Find stats table (left side info)
         stats_table = soup.find('div', class_='doll-table-info')
 
         if stats_table:
             # Extract stats from table rows
-            text = stats_table.get_text()
+            text = stats_table.get_text(' ', strip=True)
+            self.logger.debug(f"Stats table text for {profile_slug}: {text[:200]}...")
 
             # Age
             age_match = re.search(r'Age[:\s]+(\d+)', text, re.IGNORECASE)
@@ -375,7 +404,7 @@ class DDScraper(BaseScraper):
 
             # Height - handle various formats
             height_match = re.search(
-                r'Height[:\s]+(\d+[\'\u2019\u2032]?\s*\d+[\"\u2033]?|\d+\s*cm)',
+                r'Height[:\s]+(\d+[\'\u2019\u2032]?\s*\d*[\"\u2033]?|\d+\s*cm)',
                 text, re.IGNORECASE
             )
             if height_match:
@@ -386,39 +415,78 @@ class DDScraper(BaseScraper):
             if weight_match:
                 profile['weight'] = normalize_weight(weight_match.group(1))
 
-            # Bust
-            bust_match = re.search(r'Bust[:\s]+(\d+\s*[A-Z]+)', text, re.IGNORECASE)
+            # Bust - try multiple patterns
+            bust_match = re.search(r'Bust[:\s]+(\d+\s*[A-Za-z]+)', text, re.IGNORECASE)
             if bust_match:
                 profile['bust'] = normalize_bust_size(bust_match.group(1))
 
-            # Measurements
-            meas_match = re.search(
-                r'Measurements?[:\s]+(\d+[A-Z]*\s*[-/]\s*\d+\s*[-/]\s*\d+)',
+            # Figure/Measurements - "Figure: 32D-24-36" format
+            figure_match = re.search(
+                r'(?:Figure|Measurements?)[:\s]+(\d+[A-Za-z]*\s*[-/]\s*\d+\s*[-/]\s*\d+)',
                 text, re.IGNORECASE
             )
-            if meas_match:
-                profile['measurements'] = normalize_measurements(meas_match.group(1))
+            if figure_match:
+                measurements = normalize_measurements(figure_match.group(1))
+                profile['measurements'] = measurements
+                # Also extract bust from figure if not already found
+                if not profile.get('bust'):
+                    bust_from_fig = re.match(r'(\d+[A-Za-z]+)', measurements)
+                    if bust_from_fig:
+                        profile['bust'] = bust_from_fig.group(1)
+
+            # Nationality - "Nationality: European" format
+            nat_match = re.search(r'Nationality[:\s]+([A-Za-z\s/-]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
+            if nat_match:
+                nationality = nat_match.group(1).strip()
+                # Clean up and validate
+                if nationality and len(nationality) > 1:
+                    profile['nationality'] = nationality.title()
 
             # Ethnicity
-            eth_match = re.search(r'Ethnicity[:\s]+([A-Za-z\s/]+?)(?:\n|$|[A-Z][a-z]+:)', text)
+            eth_match = re.search(r'Ethnicity[:\s]+([A-Za-z\s/]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
             if eth_match:
-                profile['ethnicity'] = eth_match.group(1).strip()
+                ethnicity = eth_match.group(1).strip()
+                if ethnicity and len(ethnicity) > 1:
+                    profile['ethnicity'] = ethnicity.title()
 
             # Hair color
-            hair_match = re.search(r'Hair[:\s]+([A-Za-z\s/]+?)(?:\n|$|[A-Z][a-z]+:)', text)
+            hair_match = re.search(r'Hair[:\s]+([A-Za-z\s/]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
             if hair_match:
-                profile['hair_color'] = hair_match.group(1).strip().title()
+                hair = hair_match.group(1).strip()
+                if hair and len(hair) > 1:
+                    profile['hair_color'] = hair.title()
 
             # Eye color
-            eye_match = re.search(r'Eyes?[:\s]+([A-Za-z\s/]+?)(?:\n|$|[A-Z][a-z]+:)', text)
+            eye_match = re.search(r'Eyes?[:\s]+([A-Za-z\s/]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
             if eye_match:
-                profile['eye_color'] = eye_match.group(1).strip().title()
+                eyes = eye_match.group(1).strip()
+                if eyes and len(eyes) > 1:
+                    profile['eye_color'] = eyes.title()
 
             # Breast type (Natural/Enhanced)
             if 'natural' in text.lower():
                 profile['bust_type'] = 'Natural'
             elif 'enhanced' in text.lower():
                 profile['bust_type'] = 'Enhanced'
+
+        # Extract service type from right side div - "Service Details: GFE"
+        right_div = soup.find('div', class_='right')
+        if right_div:
+            right_text = right_div.get_text(' ', strip=True)
+            service_match = re.search(r'Service\s*(?:Details?|Type)?[:\s]+([A-Za-z\s/,]+?)(?:\s+[A-Z][a-z]+:|$)', right_text, re.IGNORECASE)
+            if service_match:
+                service = service_match.group(1).strip()
+                if service and len(service) > 1:
+                    profile['service_type'] = service.upper()
+
+        # Also try to find service type in stats table if not found
+        if not profile.get('service_type') and stats_table:
+            text = stats_table.get_text(' ', strip=True)
+            service_match = re.search(r'Service\s*(?:Details?|Type)?[:\s]+([A-Za-z\s/,]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
+            if service_match:
+                service = service_match.group(1).strip()
+                if service and len(service) > 1:
+                    profile['service_type'] = service.upper()
 
         # Extract images from rightside
         images = []
