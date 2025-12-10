@@ -652,6 +652,7 @@ class SexyFriendsTorontoScraper:
         # "GF ENTERTAINER", "GF  ENTERTAINER" (multiple spaces)
         # "Service Details:Gfe" (no space after colon)
         # "Service Details: GFE"
+        # "Service Details:GFE & PSE" (no space after colon, with & separator)
         # Keep all services found EXCEPT MASSAGE
         found_services = []
         
@@ -665,8 +666,12 @@ class SexyFriendsTorontoScraper:
         }
         
         # Find all service types mentioned in text (excluding MASSAGE)
+        # Use flexible word boundaries that allow for &, comma, and other separators
         for pattern, service_name in service_patterns.items():
-            if re.search(r'\b' + pattern + r'\b', text, re.IGNORECASE):
+            # Pattern allows word boundary or common separators (&, comma, space, colon)
+            # This handles cases like "Service Details:GFE & PSE"
+            flexible_pattern = r'(?:^|[^\w])' + pattern + r'(?:[^\w]|$)'
+            if re.search(flexible_pattern, text, re.IGNORECASE):
                 if service_name not in found_services:
                     found_services.append(service_name)
         

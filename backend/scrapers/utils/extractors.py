@@ -288,6 +288,11 @@ def extract_service_type(text: str) -> Optional[str]:
 
     Returns comma-separated list of services found.
     Excludes MASSAGE as per original logic.
+    
+    Handles formats like:
+    - "Service Details: GFE"
+    - "Service Details:GFE & PSE" (no space after colon, with & separator)
+    - "GF ENTERTAINER"
     """
     found_services = []
 
@@ -300,7 +305,10 @@ def extract_service_type(text: str) -> Optional[str]:
     }
 
     for pattern, service_name in service_patterns.items():
-        if re.search(r'\b' + pattern + r'\b', text, re.IGNORECASE):
+        # Use flexible word boundaries that allow for &, comma, and other separators
+        # This handles cases like "Service Details:GFE & PSE"
+        flexible_pattern = r'(?:^|[^\w])' + pattern + r'(?:[^\w]|$)'
+        if re.search(flexible_pattern, text, re.IGNORECASE):
             if service_name not in found_services:
                 found_services.append(service_name)
 
