@@ -6,6 +6,7 @@
     <title>E-Search - Escort Listing Aggregator</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
     <style>
+        /* Dark Theme (Default) */
         :root {
             --bg-primary: #0f0f1a;
             --bg-secondary: #1a1a2e;
@@ -26,6 +27,80 @@
             --radius: 10px;
             --radius-lg: 14px;
             --sidebar-width: 280px;
+            --modal-backdrop: rgba(0, 0, 0, 0.85);
+            --modal-border: rgba(99, 102, 241, 0.2);
+            --hover-overlay: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Light Theme */
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg-primary: #f8f9fa;
+                --bg-secondary: #ffffff;
+                --bg-tertiary: #f1f3f5;
+                --bg-card: #ffffff;
+                --accent-primary: #5b5fc7;
+                --accent-secondary: #7c5dca;
+                --accent-gradient: linear-gradient(135deg, #5b5fc7 0%, #7c5dca 100%);
+                --text-primary: #1a1a1a;
+                --text-secondary: #4a5568;
+                --text-muted: #718096;
+                --border-color: #e2e8f0;
+                --success: #0d9488;
+                --warning: #d97706;
+                --danger: #dc2626;
+                --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+                --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+                --modal-backdrop: rgba(0, 0, 0, 0.5);
+                --modal-border: rgba(91, 95, 199, 0.2);
+                --hover-overlay: rgba(0, 0, 0, 0.03);
+            }
+        }
+
+        /* Override for light theme when body has light-theme class */
+        body.light-theme {
+            --bg-primary: #f8f9fa;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f1f3f5;
+            --bg-card: #ffffff;
+            --accent-primary: #5b5fc7;
+            --accent-secondary: #7c5dca;
+            --accent-gradient: linear-gradient(135deg, #5b5fc7 0%, #7c5dca 100%);
+            --text-primary: #1a1a1a;
+            --text-secondary: #4a5568;
+            --text-muted: #718096;
+            --border-color: #e2e8f0;
+            --success: #0d9488;
+            --warning: #d97706;
+            --danger: #dc2626;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+            --modal-backdrop: rgba(0, 0, 0, 0.5);
+            --modal-border: rgba(91, 95, 199, 0.2);
+            --hover-overlay: rgba(0, 0, 0, 0.03);
+        }
+
+        /* Override for dark theme when body has dark-theme class */
+        body.dark-theme {
+            --bg-primary: #0f0f1a;
+            --bg-secondary: #1a1a2e;
+            --bg-tertiary: #252542;
+            --bg-card: #1e1e35;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-color: #334155;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --modal-backdrop: rgba(0, 0, 0, 0.85);
+            --modal-border: rgba(99, 102, 241, 0.2);
+            --hover-overlay: rgba(255, 255, 255, 0.05);
         }
 
         * {
@@ -667,11 +742,14 @@
         .listing-card {
             background: var(--bg-secondary);
             border-radius: var(--radius-lg);
-            overflow: hidden;
+            overflow: visible;
             border: 1px solid var(--border-color);
             transition: all 0.2s ease;
             cursor: pointer;
             position: relative;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
         }
 
         .listing-card:hover {
@@ -680,8 +758,16 @@
             border-color: var(--accent-primary);
         }
 
-        .listing-card {
-            will-change: transform, box-shadow;
+        .listing-card > .listing-header {
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+            overflow: hidden;
+        }
+
+        .listing-card > .listing-body {
+            flex: 1;
+            overflow: visible;
+            display: flex;
+            flex-direction: column;
         }
 
         /* Loading skeleton */
@@ -946,25 +1032,6 @@
             font-weight: 500;
         }
 
-        .view-profile-btn {
-            width: 100%;
-            margin-top: 12px;
-            padding: 10px;
-            background: var(--accent-gradient);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 0.85rem;
-            transition: all 0.2s ease;
-        }
-
-        .view-profile-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-        }
-
         /* Loading & Empty States */
         .loading, .no-results {
             text-align: center;
@@ -1021,118 +1088,379 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.9);
+            background: var(--modal-backdrop);
+            backdrop-filter: blur(8px);
             z-index: 2000;
             align-items: center;
             justify-content: center;
             overflow: auto;
             padding: 20px;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
         }
 
         .modal.show { display: flex; }
 
         .modal-content {
             background: var(--bg-secondary);
-            border-radius: var(--radius-lg);
-            max-width: 800px;
+            border-radius: 20px;
+            max-width: 900px;
             width: 100%;
             max-height: 90vh;
-            overflow: auto;
+            overflow: hidden;
             position: relative;
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--modal-border);
+            box-shadow: var(--shadow-lg);
+            animation: slideUp 0.3s ease;
+        }
+
+        .modal-content::-webkit-scrollbar {
+            display: none;
         }
 
         .modal-close {
             position: absolute;
-            top: 12px;
-            right: 12px;
-            font-size: 1.3rem;
+            top: 20px;
+            right: 20px;
+            font-size: 1.5rem;
             cursor: pointer;
             color: white;
-            background: rgba(0, 0, 0, 0.4);
-            width: 36px;
-            height: 36px;
+            background: rgba(15, 15, 26, 0.6);
+            backdrop-filter: blur(10px);
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 10;
             transition: all 0.2s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 300;
         }
 
         .modal-close:hover {
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(15, 15, 26, 0.9);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: rotate(90deg);
         }
 
         .modal-header {
-            background: var(--accent-gradient);
-            padding: 24px;
-            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+            padding: 32px 28px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .modal-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.1), transparent 50%);
+            pointer-events: none;
         }
 
         .modal-header h2 {
-            margin: 0 0 6px 0;
-            font-size: 1.5rem;
+            margin: 0 0 12px 0;
+            font-size: 1.75rem;
             color: white;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
 
         .modal-tier {
             display: inline-block;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 4px 12px;
-            border-radius: 16px;
-            font-size: 0.8rem;
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
             font-weight: 600;
             color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            position: relative;
+            z-index: 1;
         }
 
         .modal-image-gallery {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 10px;
-            padding: 16px;
-            background: var(--bg-tertiary);
+            display: flex;
+            gap: 12px;
+            padding: 16px 20px;
+            background: linear-gradient(to bottom, var(--bg-tertiary), var(--bg-secondary));
+            overflow-x: auto;
+            overflow-y: hidden;
+            max-height: 200px;
+            scroll-snap-type: x mandatory;
+        }
+
+        .modal-image-gallery::-webkit-scrollbar {
+            display: none;
+        }
+
+        .modal-image-gallery {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }
 
         .modal-gallery-image {
-            width: 100%;
-            height: 150px;
+            min-width: 160px;
+            width: 160px;
+            height: 160px;
             object-fit: cover;
-            border-radius: 8px;
+            border-radius: 12px;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            scroll-snap-align: start;
         }
 
         .modal-gallery-image:hover {
-            transform: scale(1.03);
+            transform: scale(1.05);
+            border-color: var(--accent-primary);
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
         }
 
         .modal-body {
-            padding: 20px;
+            padding: 28px;
+            max-height: calc(90vh - 340px);
+            overflow-y: auto;
+        }
+
+        .modal-body::-webkit-scrollbar {
+            display: none;
+        }
+
+        .modal-body {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }
 
         .modal-section {
-            margin-bottom: 20px;
+            margin-bottom: 28px;
+            background: var(--bg-tertiary);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .modal-section:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.1);
         }
 
         .modal-section h3 {
-            color: var(--accent-primary);
-            margin-bottom: 12px;
-            font-size: 1rem;
-            padding-bottom: 6px;
-            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--accent-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: -0.01em;
         }
 
         .modal-detail {
-            padding: 6px 0;
+            padding: 10px 0;
             color: var(--text-secondary);
-            font-size: 0.9rem;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: baseline;
+            line-height: 1.6;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .modal-detail:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
         }
 
         .modal-detail strong {
-            color: var(--text-primary);
-            min-width: 100px;
+            color: var(--accent-primary);
+            min-width: 120px;
             display: inline-block;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .modal-detail:hover {
+            color: var(--text-primary);
+        }
+
+        /* Compact Modal Sections */
+        .modal-section-compact {
+            padding: 16px 20px;
+            margin-bottom: 20px;
+        }
+
+        .modal-section-compact h3 {
+            margin-bottom: 12px;
+            font-size: 1rem;
+        }
+
+        /* Details Grid Layout */
+        .modal-details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px 16px;
+        }
+
+        .modal-detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .modal-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--accent-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .modal-value {
+            font-size: 1rem;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* Pricing Grid Layout */
+        .modal-pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+        }
+
+        .modal-price-item {
+            background: var(--bg-secondary);
+            padding: 12px 16px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .modal-price-item:hover {
+            border-color: var(--accent-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+        }
+
+        .price-duration {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .price-amount {
+            font-size: 1.25rem;
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        /* Schedule List Layout */
+        .modal-schedule-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .schedule-item {
+            background: var(--bg-secondary);
+            padding: 12px 16px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .schedule-item:hover {
+            border-color: var(--accent-primary);
+            background: var(--bg-card);
+        }
+
+        .schedule-day {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+            min-width: 85px;
+            text-transform: capitalize;
+        }
+
+        .schedule-time {
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            font-weight: 600;
+            min-width: 140px;
+        }
+
+        .schedule-location {
+            font-size: 0.85rem;
+            color: var(--accent-primary);
+            flex: 1;
+            text-align: right;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .schedule-location:hover {
+            color: var(--accent-secondary);
+            text-decoration: underline;
+        }
+
+        .view-profile-btn {
+            width: 100%;
+            padding: 14px 24px;
+            background: var(--accent-gradient);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+            margin-top: 20px;
+        }
+
+        .view-profile-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+        }
+
+        .view-profile-btn:active {
+            transform: translateY(0);
         }
 
         /* Image Viewer */
@@ -1201,6 +1529,227 @@
             padding: 8px 20px;
             border-radius: 20px;
             font-size: 0.9rem;
+        }
+
+        /* Modal Responsive Design */
+        @media (max-width: 768px) {
+            .modal {
+                padding: 10px;
+            }
+
+            .modal-content {
+                max-width: 100%;
+                border-radius: 16px;
+                max-height: 95vh;
+            }
+
+            .modal-header {
+                padding: 24px 20px;
+            }
+
+            .modal-header h2 {
+                font-size: 1.4rem;
+                margin-bottom: 8px;
+            }
+
+            .modal-tier {
+                font-size: 0.85rem;
+                padding: 5px 12px;
+            }
+
+            .modal-close {
+                top: 16px;
+                right: 16px;
+                width: 36px;
+                height: 36px;
+                font-size: 1.3rem;
+            }
+
+            .modal-image-gallery {
+                gap: 10px;
+                padding: 12px 16px;
+                max-height: 170px;
+            }
+
+            .modal-gallery-image {
+                min-width: 140px;
+                width: 140px;
+                height: 140px;
+                border-radius: 10px;
+            }
+
+            .modal-body {
+                padding: 20px 16px;
+                max-height: calc(95vh - 320px);
+            }
+
+            .modal-section {
+                padding: 16px;
+                margin-bottom: 16px;
+                border-radius: 10px;
+            }
+
+            .modal-section-compact {
+                padding: 14px 16px;
+            }
+
+            .modal-section h3 {
+                font-size: 1rem;
+                margin-bottom: 12px;
+            }
+
+            .modal-detail {
+                flex-direction: column;
+                gap: 4px;
+                padding: 8px 0;
+            }
+
+            .modal-detail strong {
+                min-width: auto;
+                margin-bottom: 2px;
+            }
+
+            .modal-details-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .modal-pricing-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+
+            .modal-price-item {
+                padding: 10px 12px;
+            }
+
+            .price-amount {
+                font-size: 1.1rem;
+            }
+
+            .schedule-day {
+                min-width: 70px;
+                font-size: 0.85rem;
+            }
+
+            .schedule-time {
+                min-width: 120px;
+                font-size: 0.85rem;
+            }
+
+            .schedule-location {
+                font-size: 0.8rem;
+            }
+
+            .view-profile-btn {
+                padding: 12px 20px;
+                font-size: 0.95rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .modal-header h2 {
+                font-size: 1.2rem;
+            }
+
+            .modal-image-gallery {
+                max-height: 150px;
+            }
+
+            .modal-gallery-image {
+                min-width: 120px;
+                width: 120px;
+                height: 120px;
+            }
+
+            .modal-body {
+                max-height: calc(95vh - 300px);
+            }
+
+            .modal-section h3 {
+                font-size: 0.95rem;
+            }
+
+            .modal-detail {
+                font-size: 0.9rem;
+            }
+
+            .modal-pricing-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .schedule-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+
+            .schedule-day {
+                min-width: auto;
+            }
+
+            .schedule-time {
+                min-width: auto;
+            }
+
+            .schedule-location {
+                text-align: left;
+                font-size: 0.75rem;
+            }
+        }
+
+        /* Light Theme Specific Enhancements */
+        @media (prefers-color-scheme: light) {
+            .listing-card {
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            }
+
+            .listing-card:hover {
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            }
+
+            .modal-close {
+                background: rgba(255, 255, 255, 0.9);
+                color: #1a1a1a;
+            }
+
+            .modal-close:hover {
+                background: rgba(255, 255, 255, 1);
+            }
+
+            .skeleton {
+                background: linear-gradient(90deg, #e2e8f0 25%, #f1f3f5 50%, #e2e8f0 75%);
+            }
+
+            input[type="text"]:focus, select:focus {
+                box-shadow: 0 0 0 3px rgba(91, 95, 199, 0.1);
+            }
+        }
+
+        body.light-theme .listing-card {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        body.light-theme .listing-card:hover {
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        body.light-theme .modal-close {
+            background: rgba(255, 255, 255, 0.9);
+            color: #1a1a1a;
+        }
+
+        body.light-theme .modal-close:hover {
+            background: rgba(255, 255, 255, 1);
+        }
+
+        body.light-theme .skeleton {
+            background: linear-gradient(90deg, #e2e8f0 25%, #f1f3f5 50%, #e2e8f0 75%);
+        }
+
+        body.light-theme input[type="text"]:focus,
+        body.light-theme select:focus {
+            box-shadow: 0 0 0 3px rgba(91, 95, 199, 0.1);
         }
 
         /* Header Link */
@@ -1407,6 +1956,36 @@
     </div>
 
     <script>
+        // Theme Detection and Management
+        function initTheme() {
+            // Check if user has a saved theme preference
+            const savedTheme = localStorage.getItem('theme');
+
+            if (savedTheme) {
+                document.body.classList.add(savedTheme);
+            } else {
+                // Apply OS preference
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+                    document.body.classList.add('light-theme');
+                } else {
+                    document.body.classList.add('dark-theme');
+                }
+            }
+
+            // Listen for OS theme changes
+            if (window.matchMedia) {
+                window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {
+                    if (!localStorage.getItem('theme')) {
+                        document.body.classList.remove('light-theme', 'dark-theme');
+                        document.body.classList.add(e.matches ? 'light-theme' : 'dark-theme');
+                    }
+                });
+            }
+        }
+
+        // Initialize theme immediately
+        initTheme();
+
         const API_BASE = 'http://localhost:8000';
         let allSources = [];
         let hideExpired = false;
@@ -1521,6 +2100,12 @@
                     loadListings(); // Auto-apply filter
                 });
             });
+
+            // Auto-select today's button
+            const todayBtn = container.querySelector('.day-btn.today');
+            if (todayBtn) {
+                todayBtn.classList.add('active');
+            }
         }
 
         // Initialize
@@ -1637,24 +2222,34 @@
 
         async function loadTowns() {
             try {
-                const response = await fetch(`${API_BASE}/api/towns`);
-                const towns = await response.json();
-                allLocations = towns.filter(t => t && t !== 'Unknown' && t !== 'unknown' && t !== '');
+                // Fetch cities and Toronto neighborhoods
+                const [citiesResponse, torontoTownsResponse] = await Promise.all([
+                    fetch(`${API_BASE}/api/cities`),
+                    fetch(`${API_BASE}/api/towns?city=Toronto`)
+                ]);
+
+                const cities = await citiesResponse.json();
+                const torontoTowns = await torontoTownsResponse.json();
+
+                // Filter out Unknown from Toronto towns
+                const filteredTorontoTowns = torontoTowns.filter(t => t && t !== 'Unknown');
+
+                // Get other cities (excluding Toronto)
+                const otherCities = cities.filter(c => c !== 'Toronto');
 
                 const container = document.getElementById('townButtons');
                 container.innerHTML = '';
 
-                if (allLocations.length === 0) {
+                if (cities.length === 0) {
                     container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">No locations available</span>';
                     return;
                 }
 
-                // Separate Toronto towns from other cities
-                const torontoTowns = allLocations.filter(t => cityDefinitions.Toronto.towns.includes(t));
-                const otherCities = allLocations.filter(t => !cityDefinitions.Toronto.towns.includes(t));
+                // Use filtered lists
+                allLocations = [...filteredTorontoTowns, ...otherCities];
 
                 // Create Toronto city group with sub-towns
-                if (torontoTowns.length > 0) {
+                if (filteredTorontoTowns.length > 0) {
                     const group = document.createElement('div');
                     group.className = 'town-group';
 
@@ -1665,7 +2260,7 @@
                     cityBtn.className = 'town-group-btn active';
                     cityBtn.id = 'torontoCityBtn';
                     cityBtn.dataset.city = 'Toronto';
-                    cityBtn.textContent = `Toronto (${torontoTowns.length})`;
+                    cityBtn.textContent = `Toronto (${filteredTorontoTowns.length})`;
                     cityBtn.addEventListener('click', () => selectCity('Toronto'));
                     header.appendChild(cityBtn);
 
@@ -1682,7 +2277,7 @@
                     children.className = 'town-group-children';
                     children.id = 'torontoChildren';
 
-                    torontoTowns.forEach(town => {
+                    filteredTorontoTowns.forEach(town => {
                         const btn = document.createElement('button');
                         btn.className = 'town-btn active';
                         btn.dataset.town = town;
@@ -1706,19 +2301,14 @@
                 }
 
                 // Add other cities as standalone buttons
-                Object.keys(cityDefinitions).forEach(cityName => {
-                    if (cityName === 'Toronto') return; // Already handled above
-
-                    // Check if this city exists in the data
-                    if (otherCities.includes(cityName)) {
-                        const btn = document.createElement('button');
-                        btn.className = 'town-btn';
-                        btn.dataset.city = cityName;
-                        btn.dataset.town = cityName;
-                        btn.textContent = cityName;
-                        btn.addEventListener('click', () => selectCity(cityName));
-                        container.appendChild(btn);
-                    }
+                otherCities.forEach(cityName => {
+                    const btn = document.createElement('button');
+                    btn.className = 'town-btn';
+                    btn.dataset.city = cityName;
+                    btn.dataset.town = cityName;
+                    btn.textContent = cityName;
+                    btn.addEventListener('click', () => selectCity(cityName));
+                    container.appendChild(btn);
                 });
             } catch (error) {
                 console.error('Error loading towns:', error);
@@ -1825,18 +2415,43 @@
                 params.append('source_ids', selectedSources.join(','));
 
                 // Cities/Towns - REQUIRED
-                const selectedTowns = Array.from(document.querySelectorAll('#townButtons .town-btn.active'))
-                    .map(btn => btn.dataset.town);
+                const selectedButtons = Array.from(document.querySelectorAll('#townButtons .town-btn.active'));
 
                 // Check if no cities/towns selected
-                if (selectedTowns.length === 0) {
+                if (selectedButtons.length === 0) {
                     container.innerHTML = '<div class="no-results">⚠️ Please select at least one city</div>';
                     document.getElementById('totalListings').textContent = '0';
                     document.getElementById('activeListings').textContent = '0';
                     document.getElementById('totalSources').textContent = '0';
                     return;
                 }
-                params.append('towns', selectedTowns.join(','));
+
+                // Separate cities from Toronto neighborhoods
+                const cities = [];
+                const towns = [];
+
+                selectedButtons.forEach(btn => {
+                    const city = btn.dataset.city;
+                    const town = btn.dataset.town;
+
+                    if (city === 'Toronto' && town !== 'Toronto') {
+                        // This is a Toronto neighborhood
+                        towns.push(town);
+                    } else {
+                        // This is a standalone city
+                        cities.push(city);
+                    }
+                });
+
+                // Add cities parameter if we have any
+                if (cities.length > 0) {
+                    params.append('cities', cities.join(','));
+                }
+
+                // Add towns parameter if we have any
+                if (towns.length > 0) {
+                    params.append('towns', towns.join(','));
+                }
 
                 // Days
                 const selectedDays = Array.from(document.querySelectorAll('.day-btn.active'))
@@ -2006,11 +2621,51 @@
             // Get rating for display
             const ratingCount = listing.tier_rates?.star || 0;
             const ratingDisplay = '🌸'.repeat(ratingCount);
+            const tierName = listing.tier_rates?.tier || '';
 
-            // Show schedule: today's schedule, or next available, or placeholder
+            // Get selected days from day buttons
+            const selectedDays = Array.from(document.querySelectorAll('.day-btn.active'))
+                .map(btn => btn.dataset.day);
+
+            // Show schedules: if days are selected, show those days' schedules; otherwise show today's or next
             let schedulesHtml = '';
-            if (todaySchedule && !isExpired) {
-                // Show today's schedule if not expired
+            if (selectedDays.length > 0 && listing.schedules && listing.schedules.length > 0) {
+                // Filter schedules to only show selected days
+                const filteredSchedules = listing.schedules.filter(s => selectedDays.includes(s.day_of_week));
+
+                if (filteredSchedules.length > 0) {
+                    // Show all matching schedules
+                    schedulesHtml = `
+                        <div class="schedule-section">
+                            ${filteredSchedules.map(schedule => {
+                                const town = schedule.location?.town || '';
+                                const startTime = schedule.start_time || '';
+                                const endTime = schedule.end_time || '';
+                                const timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || 'Available');
+                                const isToday = schedule.day_of_week === getCurrentDayOfWeek();
+                                const dayLabel = isToday ? 'Today' : schedule.day_of_week;
+
+                                return `
+                                    <div class="schedule-item${isToday ? '' : ' future'}">
+                                        <div class="schedule-title">📅 ${dayLabel}</div>
+                                        <div class="schedule-location-row">
+                                            <span class="schedule-times">${timeRange}</span>
+                                            <span class="schedule-location">📍 ${town || 'Available'}</span>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                } else {
+                    schedulesHtml = `
+                        <div class="schedule-section">
+                            <div class="schedule-title" style="color: var(--text-muted); font-style: italic;">No schedule for selected days</div>
+                        </div>
+                    `;
+                }
+            } else if (todaySchedule && !isExpired) {
+                // No days selected, show today's schedule if not expired
                 const town = todaySchedule.location?.town || '';
                 const startTime = todaySchedule.start_time || '';
                 const endTime = todaySchedule.end_time || '';
@@ -2021,8 +2676,8 @@
                         <div class="schedule-title">📅 Today</div>
                         <div class="schedule-item">
                             <div class="schedule-location-row">
-                                <span class="schedule-location">📍 ${town || 'Available'}</span>
                                 <span class="schedule-times">${timeRange}</span>
+                                <span class="schedule-location">📍 ${town || 'Available'}</span>
                             </div>
                         </div>
                     </div>
@@ -2041,8 +2696,8 @@
                             <div class="schedule-title">📅 ${nextSchedule.day_of_week}</div>
                             <div class="schedule-item future">
                                 <div class="schedule-location-row">
-                                    <span class="schedule-location">📍 ${town || 'Available'}</span>
                                     <span class="schedule-times">${timeRange}</span>
+                                    <span class="schedule-location">📍 ${town || 'Available'}</span>
                                 </div>
                             </div>
                         </div>
@@ -2061,16 +2716,17 @@
                 <div class="listing-header">
                     <div class="listing-actions">
                         <button class="listing-action-btn refresh" onclick="event.stopPropagation(); refreshListing(${listing.id})" title="Refresh">🔄</button>
-                        <button class="listing-action-btn delete" onclick="event.stopPropagation(); deleteListing(${listing.id})" title="Delete">🗑️</button>
                     </div>
                     <div class="listing-name">${listing.name}</div>
-                    ${ratingDisplay ? `<span class="listing-tier">${ratingDisplay}</span>` : ''}
+                    ${tierName ? `<span class="listing-tier">${tierName}</span>` : ''}
+                    ${ratingDisplay ? `<div style="margin-top: 4px; font-size: 0.9rem;">${ratingDisplay}</div>` : ''}
                 </div>
                 <div class="listing-body">
                     ${imageHtml}
                     ${listing.age ? `<div class="listing-detail"><span class="detail-label">Age</span><span class="detail-value">${listing.age}</span></div>` : ''}
+                    ${listing.bust ? `<div class="listing-detail"><span class="detail-label">Bust</span><span class="detail-value">${listing.bust}${listing.bust_type ? ` (${listing.bust_type})` : ''}</span></div>` : ''}
                     ${listing.height ? `<div class="listing-detail"><span class="detail-label">Height</span><span class="detail-value">${listing.height}</span></div>` : ''}
-                    ${listing.nationality ? `<div class="listing-detail"><span class="detail-label">Nationality</span><span class="detail-value">${listing.nationality}</span></div>` : ''}
+                    ${listing.weight ? `<div class="listing-detail"><span class="detail-label">Weight</span><span class="detail-value">${listing.weight}</span></div>` : ''}
                     ${schedulesHtml}
                     ${getFullProfileUrl(listing) ? `<button class="view-profile-btn" onclick="event.stopPropagation(); window.open('${getFullProfileUrl(listing)}', '_blank')">View Profile</button>` : ''}
                 </div>
@@ -2270,29 +2926,70 @@
             if (listing.tier_rates) {
                 const rates = listing.tier_rates;
                 const removeDollar = (str) => str ? str.replace(/\$/g, '') : '';
-                pricingHtml = `
-                    <div class="modal-section">
-                        <h3>⏰ Duration</h3>
-                        ${rates.incall_30min ? `<div class="modal-detail"><strong>30min:</strong> ${removeDollar(rates.incall_30min)}</div>` : ''}
-                        ${rates.incall_45min ? `<div class="modal-detail"><strong>45min:</strong> ${removeDollar(rates.incall_45min)}</div>` : ''}
-                        ${rates.incall_1hr ? `<div class="modal-detail"><strong>1hr:</strong> ${removeDollar(rates.incall_1hr)}</div>` : ''}
-                        ${rates.outcall_per_hr ? `<div class="modal-detail"><strong>Outcall/hr:</strong> ${removeDollar(rates.outcall_per_hr)}</div>` : ''}
-                    </div>
-                `;
+                const priceArray = [
+                    rates.incall_30min ? { label: '30min', value: removeDollar(rates.incall_30min) } : null,
+                    rates.incall_45min ? { label: '45min', value: removeDollar(rates.incall_45min) } : null,
+                    rates.incall_1hr ? { label: '1hr', value: removeDollar(rates.incall_1hr) } : null,
+                    rates.outcall_per_hr ? { label: 'Outcall/hr', value: removeDollar(rates.outcall_per_hr) } : null
+                ].filter(p => p !== null);
+
+                if (priceArray.length > 0) {
+                    pricingHtml = `
+                        <div class="modal-section modal-section-compact">
+                            <h3>💰 Rates</h3>
+                            <div class="modal-pricing-grid">
+                                ${priceArray.map(p => `
+                                    <div class="modal-price-item">
+                                        <span class="price-duration">${p.label}</span>
+                                        <span class="price-amount">${p.value}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
             }
 
             let schedulesHtml = '';
             if (listing.schedules && listing.schedules.length > 0) {
                 schedulesHtml = `
-                    <div class="modal-section">
+                    <div class="modal-section modal-section-compact">
                         <h3>📅 Schedule</h3>
-                        ${listing.schedules.map(s => `
-                            <div class="modal-detail">
-                                <strong>${s.day_of_week}</strong>
-                                ${formatLocation(s.location) ? ` at ${formatLocation(s.location)}` : ''}
-                                ${s.start_time ? ` - ${s.start_time}` : ''}${s.end_time ? ` to ${s.end_time}` : ''}
-                            </div>
-                        `).join('')}
+                        <div class="modal-schedule-list">
+                            ${listing.schedules.map(s => {
+                                // Format time to 12-hour format with AM/PM
+                                const formatTime = (time) => {
+                                    if (!time) return '';
+                                    const parts = time.split(':');
+                                    if (parts.length < 2) return time;
+                                    const hours = parts[0];
+                                    const minutes = parts[1];
+                                    const hour = parseInt(hours);
+                                    const ampm = hour >= 12 ? 'PM' : 'AM';
+                                    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                                    return `${displayHour}:${minutes || '00'} ${ampm}`;
+                                };
+
+                                const timeStr = s.start_time && s.end_time
+                                    ? `${formatTime(s.start_time)}-${formatTime(s.end_time)}`
+                                    : s.start_time
+                                    ? formatTime(s.start_time)
+                                    : '';
+
+                                const locationStr = formatLocation(s.location);
+                                const locationLink = locationStr
+                                    ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationStr)}" target="_blank" class="schedule-location" rel="noopener noreferrer">${locationStr}</a>`
+                                    : '';
+
+                                return `
+                                    <div class="schedule-item">
+                                        <span class="schedule-day">${s.day_of_week}</span>
+                                        <span class="schedule-time">${timeStr}</span>
+                                        ${locationLink}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
                     </div>
                 `;
             }
@@ -2300,41 +2997,60 @@
             // Get rating for modal header
             const modalRatingCount = listing.tier_rates?.star || 0;
             const modalRatingDisplay = modalRatingCount > 0 ? '🌸'.repeat(modalRatingCount) : '';
+            const modalTierName = listing.tier_rates?.tier || '';
+
+            // Build details grid (two columns for compact layout)
+            const detailsArray = [
+                listing.age ? { label: 'Age', value: listing.age } : null,
+                listing.nationality ? { label: 'Nationality', value: listing.nationality } : null,
+                listing.height ? { label: 'Height', value: listing.height } : null,
+                listing.weight ? { label: 'Weight', value: listing.weight } : null,
+                listing.bust ? { label: 'Bust', value: `${listing.bust}${listing.bust_type ? ` (${listing.bust_type})` : ''}` } : null,
+                listing.hair_color ? { label: 'Hair', value: listing.hair_color } : null,
+                listing.eye_color ? { label: 'Eyes', value: listing.eye_color } : null,
+                listing.service_type ? { label: 'Service', value: listing.service_type } : null
+            ].filter(d => d !== null);
+
+            const detailsHtml = detailsArray.length > 0 ? `
+                <div class="modal-section">
+                    <h3>📋 Details</h3>
+                    <div class="modal-details-grid">
+                        ${detailsArray.map(d => `
+                            <div class="modal-detail-item">
+                                <span class="modal-label">${d.label}</span>
+                                <span class="modal-value">${d.value}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : '';
 
             document.getElementById('modalContent').innerHTML = `
                 <div class="modal-header">
-                    <h2>${listing.name}</h2>
-                    ${modalRatingDisplay ? `<span class="modal-tier">${modalRatingDisplay}</span>` : ''}
+                    <h2>${listing.name}${modalRatingDisplay ? ` &nbsp;${modalRatingDisplay}` : ''}</h2>
+                    ${modalTierName ? `<span class="modal-tier">${modalTierName}</span>` : ''}
                     <span class="modal-close" onclick="closeModal()">&times;</span>
                 </div>
                 ${galleryHtml}
                 <div class="modal-body">
-                    <div class="modal-section">
-                        <h3>📋 Details</h3>
-                        ${listing.age ? `<div class="modal-detail"><strong>Age:</strong> ${listing.age}</div>` : ''}
-                        ${listing.nationality ? `<div class="modal-detail"><strong>Nationality:</strong> ${listing.nationality}</div>` : ''}
-                        ${listing.height ? `<div class="modal-detail"><strong>Height:</strong> ${listing.height}</div>` : ''}
-                        ${listing.weight ? `<div class="modal-detail"><strong>Weight:</strong> ${listing.weight}</div>` : ''}
-                        ${listing.bust ? `<div class="modal-detail"><strong>Bust:</strong> ${listing.bust}${listing.bust_type ? ` (${listing.bust_type})` : ''}</div>` : ''}
-                        ${listing.hair_color ? `<div class="modal-detail"><strong>Hair:</strong> ${listing.hair_color}</div>` : ''}
-                        ${listing.eye_color ? `<div class="modal-detail"><strong>Eyes:</strong> ${listing.eye_color}</div>` : ''}
-                        ${listing.service_type ? `<div class="modal-detail"><strong>Service:</strong> ${listing.service_type}</div>` : ''}
-                    </div>
+                    ${detailsHtml}
                     ${pricingHtml}
                     ${schedulesHtml}
                     ${getFullProfileUrl(listing) ? `
-                        <button class="view-profile-btn" onclick="window.open('${getFullProfileUrl(listing)}', '_blank')" style="margin-top: 16px;">
-                            View Full Profile
+                        <button class="view-profile-btn" onclick="window.open('${getFullProfileUrl(listing)}', '_blank')">
+                            <span style="font-size: 1.1rem;">🔗</span> View Full Profile
                         </button>
                     ` : ''}
                 </div>
             `;
 
             modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
         }
 
         function closeModal() {
             document.getElementById('listingModal').style.display = 'none';
+            document.body.style.overflow = '';
         }
 
         // Image viewer

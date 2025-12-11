@@ -419,7 +419,8 @@ async def get_listings(
     hide_expired: bool = Query(False, description="Hide expired listings"),
     tier: Optional[str] = Query(None, description="Filter by tier (VIP, PLATINUM VIP, etc)"),
     stars: Optional[str] = Query(None, description="Comma-separated star ratings (1-5)"),
-    towns: Optional[str] = Query(None, description="Comma-separated towns"),
+    cities: Optional[str] = Query(None, description="Comma-separated cities (Toronto, Mississauga, etc)"),
+    towns: Optional[str] = Query(None, description="Comma-separated towns (Downtown, Midtown, etc)"),
     min_age: Optional[int] = Query(None, description="Minimum age"),
     max_age: Optional[int] = Query(None, description="Maximum age"),
     nationality: Optional[str] = Query(None, description="Filter by nationality"),
@@ -465,10 +466,37 @@ async def get_listings(
             )
         ).filter(Tier.star.in_(star_list))
 
-    # Filter by towns (through schedules -> locations)
-    if towns:
-        town_list = [x.strip() for x in towns.split(",")]
-        query = query.join(Listing.schedules).join(Schedule.location).filter(Location.town.in_(town_list))
+    # Combined filter for cities/towns AND days (through schedules -> locations)
+    # This ensures both filters work together on the same schedule records
+    if cities or towns or days_of_week:
+        # Build schedule subquery with all location and day filters
+        schedule_filters = []
+
+        # Add location filters
+        if cities or towns:
+            location_filters = []
+
+            if cities:
+                city_list = [x.strip() for x in cities.split(",")]
+                location_filters.append(Location.city.in_(city_list))
+
+            if towns:
+                town_list = [x.strip() for x in towns.split(",")]
+                location_filters.append(Location.town.in_(town_list))
+
+            schedule_filters.append(or_(*location_filters))
+
+        # Add day filter
+        if days_of_week:
+            day_list = [x.strip() for x in days_of_week.split(",")]
+            schedule_filters.append(Schedule.day_of_week.in_(day_list))
+
+        # Create subquery that combines all schedule-related filters
+        subquery = db.query(Schedule.listing_id).join(Schedule.location)
+        if schedule_filters:
+            subquery = subquery.filter(and_(*schedule_filters))
+
+        query = query.filter(Listing.id.in_(subquery.subquery()))
 
     # Filter by age
     if min_age:
@@ -492,13 +520,6 @@ async def get_listings(
     # Search by name
     if search:
         query = query.filter(Listing.name.ilike(f"%{search}%"))
-
-    # Filter by days of week (through schedules)
-    if days_of_week:
-        day_list = [x.strip() for x in days_of_week.split(",")]
-        # Use exists subquery to avoid duplicate results from multiple joins
-        subquery = db.query(Schedule.listing_id).filter(Schedule.day_of_week.in_(day_list)).subquery()
-        query = query.filter(Listing.id.in_(subquery))
 
     # Order by updated_at descending
     query = query.order_by(Listing.updated_at.desc())
@@ -581,10 +602,20 @@ async def get_stats(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/cities")
+async def get_cities(db: Session = Depends(get_db)):
+    """Get all unique cities from locations"""
+    cities = db.query(Location.city).distinct().order_by(Location.city).all()
+    return [c[0] for c in cities if c[0]]
+
+
 @app.get("/api/towns")
-async def get_towns(db: Session = Depends(get_db)):
-    """Get all unique towns from locations"""
-    towns = db.query(Location.town).distinct().all()
+async def get_towns(city: Optional[str] = Query(None, description="Filter towns by city"), db: Session = Depends(get_db)):
+    """Get all unique towns from locations, optionally filtered by city"""
+    query = db.query(Location.town).distinct()
+    if city:
+        query = query.filter(Location.city == city)
+    towns = query.order_by(Location.town).all()
     return [t[0] for t in towns if t[0]]
 
 

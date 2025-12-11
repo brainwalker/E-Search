@@ -41,7 +41,8 @@ class Location(Base):
     source_id = Column(Integer, ForeignKey('sources.id'), nullable=False, index=True)
 
     # Location details
-    town = Column(String, nullable=False, index=True)  # Vaughan, Midtown, Downtown, etc.
+    city = Column(String, nullable=False, default='Toronto', index=True)  # Toronto, Mississauga, Brampton, Oakville, Vaughan
+    town = Column(String, nullable=False, index=True)  # Downtown, Midtown, North York, Etobicoke (for Toronto), or same as city for others
     location = Column(String, nullable=False)  # Yonge & Eglinton, unknown, etc.
     address = Column(String)  # Optional full address
     notes = Column(Text)  # Optional notes about the location
