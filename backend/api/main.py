@@ -418,6 +418,8 @@ async def get_listings(
     days_of_week: Optional[str] = Query(None, description="Comma-separated days (Monday,Tuesday,etc)"),
     hide_expired: bool = Query(False, description="Hide expired listings"),
     tier: Optional[str] = Query(None, description="Filter by tier (VIP, PLATINUM VIP, etc)"),
+    stars: Optional[str] = Query(None, description="Comma-separated star ratings (1-5)"),
+    towns: Optional[str] = Query(None, description="Comma-separated towns"),
     min_age: Optional[int] = Query(None, description="Minimum age"),
     max_age: Optional[int] = Query(None, description="Maximum age"),
     nationality: Optional[str] = Query(None, description="Filter by nationality"),
@@ -449,6 +451,25 @@ async def get_listings(
     if tier:
         query = query.filter(Listing.tier == tier)
 
+    # Filter by star rating (through tier table)
+    if stars:
+        star_list = [int(x.strip()) for x in stars.split(",")]
+        # Join with Tier table to filter by star rating
+        # Match on source_id and tier name (case-insensitive)
+        from sqlalchemy import func
+        query = query.join(
+            Tier,
+            and_(
+                Tier.source_id == Listing.source_id,
+                func.upper(Tier.tier) == func.upper(Listing.tier)
+            )
+        ).filter(Tier.star.in_(star_list))
+
+    # Filter by towns (through schedules -> locations)
+    if towns:
+        town_list = [x.strip() for x in towns.split(",")]
+        query = query.join(Listing.schedules).join(Schedule.location).filter(Location.town.in_(town_list))
+
     # Filter by age
     if min_age:
         query = query.filter(Listing.age >= min_age)
@@ -475,7 +496,9 @@ async def get_listings(
     # Filter by days of week (through schedules)
     if days_of_week:
         day_list = [x.strip() for x in days_of_week.split(",")]
-        query = query.join(Listing.schedules).filter(Schedule.day_of_week.in_(day_list))
+        # Use exists subquery to avoid duplicate results from multiple joins
+        subquery = db.query(Schedule.listing_id).filter(Schedule.day_of_week.in_(day_list)).subquery()
+        query = query.filter(Listing.id.in_(subquery))
 
     # Order by updated_at descending
     query = query.order_by(Listing.updated_at.desc())
@@ -556,6 +579,13 @@ async def get_stats(db: Session = Depends(get_db)):
         "total_sources": total_sources,
         "active_sources": active_sources
     }
+
+
+@app.get("/api/towns")
+async def get_towns(db: Session = Depends(get_db)):
+    """Get all unique towns from locations"""
+    towns = db.query(Location.town).distinct().all()
+    return [t[0] for t in towns if t[0]]
 
 
 @app.delete("/api/listings/{listing_id}")

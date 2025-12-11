@@ -1677,8 +1677,9 @@
             currentTable = tableName;
             currentPage = page;
 
+            // Highlight the selected table tab
             document.querySelectorAll('.table-tab').forEach(btn => {
-                btn.classList.toggle('active', btn.textContent === tableName);
+                btn.classList.toggle('active', btn.dataset.tableName === tableName);
             });
 
             const container = document.getElementById('dataContainer');

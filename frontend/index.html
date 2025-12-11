@@ -210,36 +210,38 @@
             z-index: 50;
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border-color);
-            padding: 12px 20px;
+            padding: 16px 20px;
             backdrop-filter: blur(10px);
         }
 
         .top-bar-content {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 16px;
+            justify-content: center;
+            gap: 20px;
             max-width: 1400px;
             margin: 0 auto;
+            position: relative;
         }
 
         .days-filter {
             display: flex;
-            gap: 6px;
+            gap: 8px;
+            justify-content: center;
             flex-wrap: wrap;
         }
 
         .day-btn {
-            padding: 8px 14px;
+            padding: 12px 20px;
             background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
             color: var(--text-secondary);
-            font-size: 0.85rem;
-            font-weight: 500;
+            font-size: 1rem;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
-            min-width: 50px;
+            min-width: 70px;
             text-align: center;
         }
 
@@ -247,29 +249,175 @@
             background: var(--bg-card);
             border-color: var(--accent-primary);
             color: var(--text-primary);
+            transform: translateY(-2px);
         }
 
         .day-btn.active {
             background: var(--accent-gradient);
             border-color: transparent;
             color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
         }
 
         .day-btn.disabled {
-            opacity: 0.4;
+            opacity: 0.3;
             cursor: not-allowed;
             text-decoration: line-through;
         }
 
         .day-btn.today {
             border-color: var(--success);
-            box-shadow: 0 0 0 1px var(--success);
+            box-shadow: 0 0 0 2px var(--success);
+        }
+
+        .day-btn.today.active {
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
         }
 
         .top-bar-actions {
+            position: absolute;
+            right: 0;
             display: flex;
             gap: 10px;
             align-items: center;
+        }
+
+        /* Star Filter */
+        .star-filter {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .star-btn {
+            padding: 6px 10px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+            opacity: 0.6;
+        }
+
+        .star-btn:hover {
+            background: var(--bg-card);
+            border-color: var(--accent-primary);
+            opacity: 1;
+        }
+
+        .star-btn.active {
+            background: rgba(251, 191, 36, 0.15);
+            border-color: #fbbf24;
+            opacity: 1;
+        }
+
+        /* Town Buttons */
+        .town-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .town-btn {
+            padding: 6px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .town-btn:hover {
+            background: var(--bg-card);
+            border-color: var(--accent-primary);
+        }
+
+        .town-btn.active {
+            background: var(--accent-gradient);
+            border-color: transparent;
+            color: white;
+        }
+
+        /* Town group (Toronto parent) */
+        .town-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 100%;
+        }
+
+        .town-group-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .town-group-btn {
+            padding: 8px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex: 1;
+        }
+
+        .town-group-btn:hover {
+            border-color: var(--accent-primary);
+        }
+
+        .town-group-btn.active {
+            background: var(--accent-gradient);
+            border-color: transparent;
+            color: white;
+        }
+
+        .town-group-btn.partial {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
+            border-color: var(--accent-primary);
+        }
+
+        .town-group-toggle {
+            padding: 6px 10px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .town-group-toggle:hover {
+            background: var(--bg-card);
+        }
+
+        .town-group-children {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            padding-left: 12px;
+            border-left: 2px solid var(--border-color);
+            margin-left: 8px;
+        }
+
+        .town-group-children.collapsed {
+            display: none;
+        }
+
+        .town-group-children .town-btn {
+            padding: 4px 10px;
+            font-size: 0.75rem;
         }
 
         /* Stats Bar - Compact */
@@ -307,6 +455,39 @@
             font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.3px;
+        }
+
+        /* Image Toggle Button */
+        .image-toggle-btn {
+            padding: 6px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: auto;
+        }
+
+        .image-toggle-btn:hover {
+            background: var(--bg-card);
+            border-color: var(--accent-primary);
+        }
+
+        .image-toggle-btn.active {
+            background: var(--accent-gradient);
+            border-color: transparent;
+            color: white;
+        }
+
+        /* Hide images when toggle is off */
+        .listings-grid.hide-images .listing-thumbnail {
+            display: none;
         }
 
         /* Content Area */
@@ -705,6 +886,30 @@
             font-size: 0.75rem;
         }
 
+        .schedule-location {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        /* Expired/past time slot styling */
+        .listing-card.expired {
+            opacity: 0.5;
+            border: 2px dashed var(--text-muted);
+        }
+
+        .listing-card.expired:hover {
+            opacity: 0.7;
+            border-color: var(--text-muted);
+        }
+
+        .listing-card.expired .listing-thumbnail {
+            filter: grayscale(70%);
+        }
+
+        .listing-card.expired .listing-header {
+            background: linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
+        }
+
         .tags {
             display: flex;
             flex-wrap: wrap;
@@ -1004,21 +1209,35 @@
             .sidebar {
                 transform: translateX(-100%);
             }
-            
+
             .sidebar.open {
                 transform: translateX(0);
             }
-            
+
             .main-content {
                 margin-left: 0;
             }
-            
+
             .sidebar-toggle {
                 left: 0;
             }
-            
+
             .listings-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .top-bar-actions {
+                position: static;
+            }
+
+            .top-bar-content {
+                flex-direction: column;
+            }
+
+            .day-btn {
+                padding: 10px 14px;
+                font-size: 0.9rem;
+                min-width: 60px;
             }
             
             .days-filter {
@@ -1050,20 +1269,32 @@
                     </div>
                 </div>
 
-                <!-- Filters row -->
+                <!-- Star Rating Filter -->
                 <div class="sidebar-section">
-                    <div class="filter-row">
-                        <select id="tierFilter" onchange="loadListings()">
-                            <option value="">All Tiers</option>
-                            <option value="Elite">Elite</option>
-                            <option value="VIP">VIP</option>
-                            <option value="Ultra VIP">Ultra VIP</option>
-                            <option value="Platinum VIP">Platinum VIP</option>
-                        </select>
-                        <div class="toggle-compact">
-                            <div class="toggle-switch" id="hideExpiredToggle" onclick="toggleHideExpired()"></div>
-                            <span class="toggle-label-small">Expired</span>
-                        </div>
+                    <div class="sidebar-section-title">
+                        <span>Rating</span>
+                    </div>
+                    <div class="star-filter" id="starFilter">
+                        <button class="star-btn" data-stars="1" onclick="toggleStarFilter(1, this)">⭐</button>
+                        <button class="star-btn" data-stars="2" onclick="toggleStarFilter(2, this)">⭐⭐</button>
+                        <button class="star-btn" data-stars="3" onclick="toggleStarFilter(3, this)">⭐⭐⭐</button>
+                        <button class="star-btn" data-stars="4" onclick="toggleStarFilter(4, this)">⭐⭐⭐⭐</button>
+                        <button class="star-btn" data-stars="5" onclick="toggleStarFilter(5, this)">⭐⭐⭐⭐⭐</button>
+                    </div>
+                    <div class="toggle-row" style="margin-top: 8px;">
+                        <div class="toggle-switch" id="hideExpiredToggle" onclick="toggleHideExpired()"></div>
+                        <span class="toggle-label">Hide Expired</span>
+                    </div>
+                </div>
+
+                <!-- Towns filter -->
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">
+                        <span>Towns</span>
+                        <button class="select-all-btn" onclick="toggleAllTowns()">Toggle All</button>
+                    </div>
+                    <div class="town-buttons" id="townButtons">
+                        <!-- Populated dynamically -->
                     </div>
                 </div>
 
@@ -1120,6 +1351,10 @@
                     <span class="stat-value" id="totalSources">0</span>
                     <span class="stat-label">Sources</span>
                 </div>
+                <button class="image-toggle-btn" id="imageToggleBtn" onclick="toggleImages()">
+                    <span id="imageToggleIcon">🖼️</span>
+                    <span id="imageToggleText">Show Images</span>
+                </button>
             </div>
 
             <!-- Listings -->
@@ -1152,6 +1387,7 @@
         const API_BASE = 'http://localhost:8000';
         let allSources = [];
         let hideExpired = false;
+        let showImages = false; // Images hidden by default
 
         // Request management
         let listingsAbortController = null;
@@ -1275,7 +1511,7 @@
             }
 
             initDayButtons();
-            await Promise.all([loadStats(), loadSources()]);
+            await Promise.all([loadStats(), loadSources(), loadTowns()]);
             await loadListings();
         }
 
@@ -1346,7 +1582,7 @@
                         console.warn('Skipping source with invalid name:', source);
                         return;
                     }
-                    
+
                     const btn = document.createElement('button');
                     btn.className = 'source-btn active';
                     btn.dataset.sourceId = source.id;
@@ -1361,6 +1597,145 @@
             } catch (error) {
                 console.error('Error loading sources:', error);
             }
+        }
+
+        // Load towns from schedules
+        let allTowns = [];
+        const torontoSubTowns = ['Downtown', 'Midtown', 'Etobicoke', 'North York'];
+
+        async function loadTowns() {
+            try {
+                const response = await fetch(`${API_BASE}/api/towns`);
+                const towns = await response.json();
+                allTowns = towns.filter(t => t && t !== 'Unknown' && t !== 'unknown' && t !== '');
+
+                const container = document.getElementById('townButtons');
+                container.innerHTML = '';
+
+                if (allTowns.length === 0) {
+                    container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">No towns available</span>';
+                    return;
+                }
+
+                // Separate Toronto sub-towns from other towns
+                const torontoTowns = allTowns.filter(t => torontoSubTowns.includes(t));
+                const otherTowns = allTowns.filter(t => !torontoSubTowns.includes(t));
+
+                // Create Toronto group if we have any Toronto sub-towns
+                if (torontoTowns.length > 0) {
+                    const group = document.createElement('div');
+                    group.className = 'town-group';
+
+                    const header = document.createElement('div');
+                    header.className = 'town-group-header';
+
+                    const groupBtn = document.createElement('button');
+                    groupBtn.className = 'town-group-btn active';
+                    groupBtn.id = 'torontoGroupBtn';
+                    groupBtn.textContent = `Toronto (${torontoTowns.length})`;
+                    groupBtn.addEventListener('click', () => toggleTorontoGroup());
+                    header.appendChild(groupBtn);
+
+                    const toggleBtn = document.createElement('button');
+                    toggleBtn.className = 'town-group-toggle';
+                    toggleBtn.id = 'torontoToggleBtn';
+                    toggleBtn.textContent = '▼';
+                    toggleBtn.addEventListener('click', () => toggleTorontoExpand());
+                    header.appendChild(toggleBtn);
+
+                    group.appendChild(header);
+
+                    const children = document.createElement('div');
+                    children.className = 'town-group-children';
+                    children.id = 'torontoChildren';
+
+                    torontoTowns.forEach(town => {
+                        const btn = document.createElement('button');
+                        btn.className = 'town-btn active';
+                        btn.dataset.town = town;
+                        btn.dataset.group = 'toronto';
+                        btn.textContent = town;
+                        btn.addEventListener('click', () => {
+                            btn.classList.toggle('active');
+                            updateTorontoGroupState();
+                            loadListings();
+                        });
+                        children.appendChild(btn);
+                    });
+
+                    group.appendChild(children);
+                    container.appendChild(group);
+                }
+
+                // Add other towns
+                otherTowns.forEach(town => {
+                    const btn = document.createElement('button');
+                    btn.className = 'town-btn active';
+                    btn.dataset.town = town;
+                    btn.textContent = town;
+                    btn.addEventListener('click', () => {
+                        btn.classList.toggle('active');
+                        loadListings();
+                    });
+                    container.appendChild(btn);
+                });
+            } catch (error) {
+                console.error('Error loading towns:', error);
+                document.getElementById('townButtons').innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">Error loading towns</span>';
+            }
+        }
+
+        function toggleTorontoGroup() {
+            const children = document.querySelectorAll('#torontoChildren .town-btn');
+            const allActive = Array.from(children).every(btn => btn.classList.contains('active'));
+            children.forEach(btn => btn.classList.toggle('active', !allActive));
+            updateTorontoGroupState();
+            loadListings();
+        }
+
+        function toggleTorontoExpand() {
+            const children = document.getElementById('torontoChildren');
+            const toggleBtn = document.getElementById('torontoToggleBtn');
+            children.classList.toggle('collapsed');
+            toggleBtn.textContent = children.classList.contains('collapsed') ? '▶' : '▼';
+        }
+
+        function updateTorontoGroupState() {
+            const children = document.querySelectorAll('#torontoChildren .town-btn');
+            const groupBtn = document.getElementById('torontoGroupBtn');
+            if (!groupBtn) return;
+
+            const activeCount = Array.from(children).filter(btn => btn.classList.contains('active')).length;
+            const totalCount = children.length;
+
+            groupBtn.classList.remove('active', 'partial');
+            if (activeCount === totalCount) {
+                groupBtn.classList.add('active');
+            } else if (activeCount > 0) {
+                groupBtn.classList.add('partial');
+            }
+        }
+
+        function toggleAllTowns() {
+            const buttons = document.querySelectorAll('#townButtons .town-btn');
+            const allActive = Array.from(buttons).every(btn => btn.classList.contains('active'));
+            buttons.forEach(btn => btn.classList.toggle('active', !allActive));
+            updateTorontoGroupState();
+            loadListings();
+        }
+
+        // Star filter
+        let selectedStars = [];
+        function toggleStarFilter(stars, btn) {
+            const index = selectedStars.indexOf(stars);
+            if (index > -1) {
+                selectedStars.splice(index, 1);
+                btn.classList.remove('active');
+            } else {
+                selectedStars.push(stars);
+                btn.classList.add('active');
+            }
+            loadListings();
         }
 
         async function loadListings() {
@@ -1388,14 +1763,23 @@
                     .map(btn => btn.dataset.day);
                 if (selectedDays.length > 0) params.append('days_of_week', selectedDays.join(','));
 
+                // Towns filter
+                const selectedTowns = Array.from(document.querySelectorAll('#townButtons .town-btn.active'))
+                    .map(btn => btn.dataset.town);
+                if (selectedTowns.length > 0 && selectedTowns.length < allTowns.length) {
+                    params.append('towns', selectedTowns.join(','));
+                }
+
+                // Star rating filter
+                if (selectedStars.length > 0) {
+                    params.append('stars', selectedStars.join(','));
+                }
+
                 // Other filters
                 if (hideExpired) params.append('hide_expired', 'true');
 
                 const search = document.getElementById('searchInput').value.trim();
                 if (search) params.append('search', search);
-
-                const tier = document.getElementById('tierFilter').value;
-                if (tier) params.append('tier', tier);
 
                 const cacheKey = `listings:${params.toString()}`;
                 let listings = getCached(cacheKey);
@@ -1408,13 +1792,29 @@
                     setCache(cacheKey, listings);
                 }
 
+                // Update stats based on filtered results
+                const today = getCurrentDayOfWeek();
+                const activeCount = listings.filter(l => {
+                    const todaySched = l.schedules?.find(s => s.day_of_week === today);
+                    if (!todaySched) return false;
+                    if (!todaySched.end_time) return true;
+                    return !isTimePast(todaySched.end_time);
+                }).length;
+
+                // Count unique sources in filtered results
+                const sourcesInResults = new Set(listings.map(l => l.source_id).filter(Boolean));
+
+                document.getElementById('totalListings').textContent = listings.length;
+                document.getElementById('activeListings').textContent = activeCount;
+                document.getElementById('totalSources').textContent = sourcesInResults.size;
+
                 if (listings.length === 0) {
                     container.innerHTML = '<div class="no-results">No listings found.</div>';
                     return;
                 }
 
                 const grid = document.createElement('div');
-                grid.className = 'listings-grid';
+                grid.className = 'listings-grid' + (showImages ? '' : ' hide-images');
 
                 // Use DocumentFragment for better performance
                 const fragment = document.createDocumentFragment();
@@ -1439,40 +1839,83 @@
             }
         }
 
+        // Check if a time string (e.g., "2:00 PM", "14:00") is in the past
+        function isTimePast(timeStr) {
+            if (!timeStr) return false;
+            const now = new Date();
+            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+            // Parse time string - handle various formats
+            let hours, minutes = 0;
+            const timeMatch = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM|am|pm)?/i);
+            if (!timeMatch) return false;
+
+            hours = parseInt(timeMatch[1]);
+            if (timeMatch[2]) minutes = parseInt(timeMatch[2]);
+            const period = timeMatch[3];
+
+            if (period) {
+                if (period.toUpperCase() === 'PM' && hours !== 12) hours += 12;
+                if (period.toUpperCase() === 'AM' && hours === 12) hours = 0;
+            }
+
+            const timeMinutes = hours * 60 + minutes;
+            return timeMinutes < currentMinutes;
+        }
+
+        // Get today's schedule for a listing
+        function getTodaySchedule(listing) {
+            if (!listing.schedules || listing.schedules.length === 0) return null;
+            const today = getCurrentDayOfWeek();
+            return listing.schedules.find(s => s.day_of_week === today);
+        }
+
         function createListingCard(listing) {
             const card = document.createElement('div');
             card.className = 'listing-card';
             card.setAttribute('data-listing-id', listing.id);
             card.onclick = () => openListingModal(listing);
 
+            // Check if today's schedule time slot has passed
+            const todaySchedule = getTodaySchedule(listing);
+            const isExpired = todaySchedule && todaySchedule.end_time && isTimePast(todaySchedule.end_time);
+            if (isExpired) {
+                card.classList.add('expired');
+            }
+
             const images = getFullImageUrls(listing);
             const imageHtml = images.length > 0
                 ? `<img data-src="${images[0]}" class="listing-thumbnail" alt="${listing.name}">`
                 : '';
+
+            // Get star count for display
+            const starCount = listing.tier_rates?.star || 0;
+            const starsDisplay = '🌹'.repeat(starCount);
 
             let ratesHtml = '';
             if (listing.tier_rates) {
                 const rates = listing.tier_rates;
                 ratesHtml = `
                     <div class="rates-section">
-                        <div class="rates-title">💰 ${rates.tier} Rates</div>
+                        <div class="rates-title">${'🌹'.repeat(rates.star || 0)}</div>
                         ${rates.incall_30min ? `<div class="rate-item"><span>30min</span><span>${rates.incall_30min}</span></div>` : ''}
                         ${rates.incall_1hr ? `<div class="rate-item"><span>1hr</span><span>${rates.incall_1hr}</span></div>` : ''}
                     </div>
                 `;
             }
 
+            // Only show today's schedule with town and time
             let schedulesHtml = '';
-            if (listing.schedules && listing.schedules.length > 0) {
+            if (todaySchedule) {
+                // Get town only (not full location)
+                const town = todaySchedule.town || '';
+                const timeStr = todaySchedule.start_time ? ` @ ${todaySchedule.start_time}` : '';
                 schedulesHtml = `
                     <div class="schedule-section">
-                        <div class="schedule-title">📅 Schedule</div>
-                        ${listing.schedules.slice(0, 2).map(s => `
-                            <div class="schedule-item">
-                                <div class="schedule-day">${s.day_of_week}</div>
-                                <div class="schedule-time">${s.start_time || ''} ${s.end_time ? `- ${s.end_time}` : ''}</div>
-                            </div>
-                        `).join('')}
+                        <div class="schedule-title">📅 Today</div>
+                        <div class="schedule-item">
+                            <div class="schedule-location">📍 ${town || 'Available'}${timeStr}</div>
+                        </div>
                     </div>
                 `;
             }
@@ -1484,7 +1927,7 @@
                         <button class="listing-action-btn delete" onclick="event.stopPropagation(); deleteListing(${listing.id})" title="Delete">🗑️</button>
                     </div>
                     <div class="listing-name">${listing.name}</div>
-                    <span class="listing-tier">${listing.tier || 'Standard'}</span>
+                    <span class="listing-tier">${listing.tier || 'Standard'} ${starsDisplay}</span>
                 </div>
                 <div class="listing-body">
                     ${imageHtml}
@@ -1506,11 +1949,28 @@
             const mainContent = document.getElementById('mainContent');
             const toggle = document.getElementById('sidebarToggle');
             const icon = document.getElementById('toggleIcon');
-            
+
             sidebar.classList.toggle('collapsed');
             mainContent.classList.toggle('expanded');
             toggle.classList.toggle('collapsed');
             icon.textContent = sidebar.classList.contains('collapsed') ? '▶' : '◀';
+        }
+
+        // Toggle images visibility
+        function toggleImages() {
+            showImages = !showImages;
+            const btn = document.getElementById('imageToggleBtn');
+            const icon = document.getElementById('imageToggleIcon');
+            const text = document.getElementById('imageToggleText');
+            const grid = document.querySelector('.listings-grid');
+
+            btn.classList.toggle('active', showImages);
+            icon.textContent = showImages ? '🖼️' : '🚫';
+            text.textContent = showImages ? 'Hide Images' : 'Show Images';
+
+            if (grid) {
+                grid.classList.toggle('hide-images', !showImages);
+            }
         }
 
         // Debounce for search input
@@ -1534,11 +1994,15 @@
 
         function clearFilters() {
             document.getElementById('searchInput').value = '';
-            document.getElementById('tierFilter').value = '';
             hideExpired = false;
             document.getElementById('hideExpiredToggle').classList.remove('active');
             document.querySelectorAll('.day-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('#sourcesButtons .source-btn').forEach(btn => btn.classList.add('active'));
+            document.querySelectorAll('#townButtons .town-btn').forEach(btn => btn.classList.add('active'));
+            updateTorontoGroupState();
+            // Clear star filters
+            selectedStars = [];
+            document.querySelectorAll('.star-btn').forEach(btn => btn.classList.remove('active'));
             loadListings();
         }
 
