@@ -239,22 +239,85 @@ async def get_logs(
 
 @router.post("/restart")
 async def restart_backend():
-    """Trigger backend restart (creates a restart flag file)"""
+    """Trigger backend restart by killing uvicorn processes and starting fresh"""
+    import subprocess
+    import signal
+    import os
+    import sys
+
     try:
-        # Create a restart flag file that an external process manager can watch
-        restart_flag = Path(__file__).parent.parent.parent / "backend" / ".restart_flag"
-        restart_flag.touch()
-        
-        # Log the restart request
         logging.info("Backend restart requested via API")
-        
+
+        # Get the backend directory
+        backend_dir = Path(__file__).parent.parent
+
+        # Find and kill existing uvicorn processes on port 8000
+        try:
+            # Use lsof to find process on port 8000
+            result = subprocess.run(
+                ["lsof", "-ti", ":8000"],
+                capture_output=True,
+                text=True
+            )
+            if result.stdout.strip():
+                pids = result.stdout.strip().split('\n')
+                for pid in pids:
+                    if pid:
+                        try:
+                            os.kill(int(pid), signal.SIGTERM)
+                            logging.info(f"Killed process {pid}")
+                        except (ProcessLookupError, ValueError):
+                            pass
+        except Exception as e:
+            logging.warning(f"Error killing existing processes: {e}")
+
+        # Give processes time to die
+        import asyncio
+        await asyncio.sleep(1)
+
+        # Force kill any remaining processes
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", ":8000"],
+                capture_output=True,
+                text=True
+            )
+            if result.stdout.strip():
+                pids = result.stdout.strip().split('\n')
+                for pid in pids:
+                    if pid:
+                        try:
+                            os.kill(int(pid), signal.SIGKILL)
+                            logging.info(f"Force killed process {pid}")
+                        except (ProcessLookupError, ValueError):
+                            pass
+        except Exception:
+            pass
+
+        await asyncio.sleep(0.5)
+
+        # Start new uvicorn process
+        venv_python = backend_dir / ".venv" / "bin" / "python"
+        if not venv_python.exists():
+            venv_python = sys.executable
+
+        subprocess.Popen(
+            [str(venv_python), "-m", "uvicorn", "api.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"],
+            cwd=str(backend_dir),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True
+        )
+
+        logging.info("Backend restart initiated")
+
         return {
-            "message": "Restart signal sent. The backend will restart if a process manager is configured.",
-            "restart_flag_created": True,
-            "note": "For automatic restart, use a process manager like supervisor, systemd, or a wrapper script that watches for .restart_flag"
+            "message": "Backend restart initiated. Server will be available shortly.",
+            "success": True
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating restart flag: {str(e)}")
+        logging.error(f"Error during restart: {e}")
+        raise HTTPException(status_code=500, detail=f"Error restarting backend: {str(e)}")
 
 
 @router.get("/status")
@@ -262,14 +325,12 @@ async def get_backend_status():
     """Get backend status information"""
     try:
         log_file_size = LOG_FILE.stat().st_size if LOG_FILE.exists() else 0
-        restart_flag_exists = (Path(__file__).parent.parent.parent / "backend" / ".restart_flag").exists()
-        
+
         return {
             "status": "running",
             "log_file": str(LOG_FILE),
             "log_file_exists": LOG_FILE.exists(),
             "log_file_size_bytes": log_file_size,
-            "restart_flag_exists": restart_flag_exists,
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:

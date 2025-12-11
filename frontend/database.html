@@ -1104,6 +1104,41 @@
             cursor: not-allowed;
         }
 
+        /* Sticky columns for listings table */
+        .table-wrapper table th.sticky-col,
+        .table-wrapper table td.sticky-col {
+            position: sticky;
+            background: var(--bg-secondary);
+            z-index: 5;
+        }
+
+        .table-wrapper table th.sticky-col {
+            background: var(--accent-gradient);
+            z-index: 15;
+        }
+
+        .table-wrapper table th.sticky-checkbox,
+        .table-wrapper table td.sticky-checkbox {
+            left: 0;
+            width: 40px;
+        }
+
+        .table-wrapper table th.sticky-actions,
+        .table-wrapper table td.sticky-actions {
+            left: 40px;
+            width: 90px;
+        }
+
+        .table-wrapper table th.sticky-name,
+        .table-wrapper table td.sticky-name {
+            left: 130px;
+            min-width: 150px;
+        }
+
+        .table-wrapper table tr:hover td.sticky-col {
+            background: var(--bg-tertiary);
+        }
+
         /* Responsive */
         @media (max-width: 1200px) {
             .main-content {
@@ -1297,6 +1332,7 @@
         let logsUpdateInterval = null;
         let lastLogTimestamp = null;
         let logsAbortController = null;
+        let logsCleared = false;
 
         // Sorting state
         let sortColumn = null;
@@ -1705,6 +1741,32 @@
             const container = document.getElementById('dataContainer');
             const hasActions = ['listings', 'locations', 'tiers'].includes(data.table);
 
+            // Reorder columns for listings table
+            if (data.table === 'listings') {
+                const desiredOrder = [
+                    'source_id', 'name', 'tier', 'age', 'measurements', 'bust', 'bust_type',
+                    'service_type', 'height', 'weight', 'hair_color', 'eye_color',
+                    'nationality', 'ethnicity'
+                ];
+
+                // Reorder columns: prioritize desired order, then append any remaining columns
+                const reorderedColumns = [];
+                desiredOrder.forEach(col => {
+                    if (data.columns.includes(col)) {
+                        reorderedColumns.push(col);
+                    }
+                });
+
+                // Add any remaining columns not in the desired order
+                data.columns.forEach(col => {
+                    if (!desiredOrder.includes(col) && !reorderedColumns.includes(col)) {
+                        reorderedColumns.push(col);
+                    }
+                });
+
+                data.columns = reorderedColumns;
+            }
+
             // Sort data if sort column is set
             let sortedData = [...data.data];
             if (sortColumn && data.columns.includes(sortColumn)) {
@@ -1735,19 +1797,20 @@
 
                 // Checkbox column for multi-select (only for listings)
                 if (data.table === 'listings') {
-                    html += `<th style="width: 40px;"><input type="checkbox" class="select-checkbox" onchange="toggleSelectAll(this)"></th>`;
+                    html += `<th class="sticky-col sticky-checkbox"><input type="checkbox" class="select-checkbox" onchange="toggleSelectAll(this)"></th>`;
                 }
 
                 // Actions column
                 if (hasActions) {
-                    html += `<th style="width: 90px;">Actions</th>`;
+                    html += `<th class="sticky-col sticky-actions">Actions</th>`;
                 }
 
                 // Sortable column headers
                 data.columns.forEach(col => {
                     const isSorted = sortColumn === col;
                     const sortClass = isSorted ? (sortDirection === 'asc' ? 'sorted-asc' : 'sorted-desc') : '';
-                    html += `<th class="sortable ${sortClass}" onclick="sortTable('${col}')">${col}<span class="sort-icon"></span></th>`;
+                    const stickyClass = (data.table === 'listings' && col === 'name') ? 'sticky-col sticky-name' : '';
+                    html += `<th class="sortable ${sortClass} ${stickyClass}" onclick="sortTable('${col}')">${col}<span class="sort-icon"></span></th>`;
                 });
                 html += '</tr></thead><tbody>';
 
@@ -1758,22 +1821,22 @@
 
                     // Checkbox
                     if (data.table === 'listings') {
-                        html += `<td><input type="checkbox" class="select-checkbox" ${isSelected ? 'checked' : ''} onchange="toggleRowSelect(${rowId}, this)"></td>`;
+                        html += `<td class="sticky-col sticky-checkbox"><input type="checkbox" class="select-checkbox" ${isSelected ? 'checked' : ''} onchange="toggleRowSelect(${rowId}, this)"></td>`;
                     }
 
                     // Action buttons - icon only
                     if (data.table === 'listings') {
-                        html += `<td class="action-cell">
+                        html += `<td class="action-cell sticky-col sticky-actions">
                             <button class="action-btn refresh" onclick="refreshSingleListing(${rowId})" title="Refresh">🔄</button>
                             <button class="action-btn edit" onclick="editSingleRow('listings', ${rowId})" title="Edit">✏️</button>
                             <button class="action-btn delete" onclick="deleteSingleListing(${rowId})" title="Delete">🗑️</button>
                         </td>`;
                     } else if (data.table === 'locations') {
-                        html += `<td class="action-cell">
+                        html += `<td class="action-cell sticky-col sticky-actions">
                             <button class="action-btn edit" onclick="editSingleRow('locations', ${rowId})" title="Edit">✏️</button>
                         </td>`;
                     } else if (data.table === 'tiers') {
-                        html += `<td class="action-cell">
+                        html += `<td class="action-cell sticky-col sticky-actions">
                             <button class="action-btn edit" onclick="editSingleRow('tiers', ${rowId})" title="Edit">✏️</button>
                         </td>`;
                     }
@@ -1798,7 +1861,24 @@
                             displayValue = escapeHtml(String(value));
                         }
 
-                        html += `<td>${displayValue}</td>`;
+                        // Add sticky class for name column in listings table, and add profile link
+                        const stickyClass = (data.table === 'listings' && col === 'name') ? 'sticky-col sticky-name' : '';
+
+                        // Add hyperlink to profile for name column (do this AFTER escaping HTML)
+                        if (data.table === 'listings' && col === 'name' && row['profile_url'] && value !== null) {
+                            // Look up source from source_id
+                            const sourceId = row['source_id'];
+                            const sourceObj = allSources.find(s => s.id === sourceId);
+
+                            if (sourceObj && sourceObj.base_url) {
+                                // Use the base_url from the sources table
+                                const fullUrl = sourceObj.base_url + row['profile_url'];
+                                // displayValue is already escaped, so wrap it in link
+                                displayValue = `<a href="${escapeHtml(fullUrl)}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); text-decoration: none; font-weight: 600;">${displayValue}</a>`;
+                            }
+                        }
+
+                        html += `<td class="${stickyClass}">${displayValue}</td>`;
                     });
 
                     html += '</tr>';
@@ -2037,7 +2117,8 @@
 
                 if (data.logs && data.logs.length > 0) {
                     let html = '';
-                    if (!logsPaused) {
+                    // If logs were cleared, only show new logs (don't refetch all 500 lines)
+                    if (!logsPaused && !logsCleared) {
                         const allLogsResponse = await fetch(`${API_BASE}/db/logs?lines=500`, {
                             cache: 'no-cache',
                             headers: { 'Cache-Control': 'no-cache' }
@@ -2049,10 +2130,15 @@
                             });
                         }
                     } else {
+                        // If logs cleared or paused, only append new logs incrementally
                         html = container.innerHTML;
                         data.logs.forEach(line => {
                             html += formatLogLine(line);
                         });
+                        // Once we have new logs, unset the cleared flag
+                        if (logsCleared && data.logs.length > 0) {
+                            logsCleared = false;
+                        }
                     }
 
                     container.innerHTML = html;
@@ -2114,7 +2200,9 @@
             const container = document.getElementById('logsContainer');
             container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">Logs cleared</div>';
             document.getElementById('logsCount').textContent = '0 lines';
-            lastLogTimestamp = null;
+            // Set the timestamp to current time to only show NEW logs from this point forward
+            lastLogTimestamp = new Date().toISOString();
+            logsCleared = true;
         }
 
         // Log filter state - HTTP hidden by default
@@ -2167,6 +2255,7 @@
 
         async function refreshLogs() {
             lastLogTimestamp = null;
+            logsCleared = false;
             await loadLogs();
         }
 
@@ -2205,6 +2294,7 @@
                     alert(`✅ ${data.message}`);
                     setTimeout(() => {
                         lastLogTimestamp = null;
+                        logsCleared = false;
                         loadLogs();
                     }, 1000);
                 } else {

@@ -43,10 +43,10 @@ DD_LOCATION_PATTERNS = {
 DD_TIER_MAP = {
     'doll': 'Doll',
     'diamond doll': 'Diamond Doll',
-    'platinum dolls': 'Platinum Dolls',
-    'platinum doll': 'Platinum Dolls',
-    'sapphire dolls': 'Sapphire Dolls',
-    'sapphire doll': 'Sapphire Dolls',
+    'platinum dolls': 'Platinum Doll',
+    'platinum doll': 'Platinum Doll',
+    'sapphire dolls': 'Sapphire Doll',
+    'sapphire doll': 'Sapphire Doll',
 }
 
 
@@ -439,8 +439,8 @@ class DDScraper(BaseScraper):
                         if bust_from_fig:
                             profile['bust'] = bust_from_fig.group(1)
 
-            # Nationality - "Nationality: European" format
-            nat_match = re.search(r'Nationality[:\s]+([A-Za-z\s/-]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
+            # Nationality - handle patterns like "Nationality: European" or "Nationality: Spanish & Columbian"
+            nat_match = re.search(r'Nationality[:\s]+([A-Za-z\s/&-]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
             if nat_match:
                 nationality = nat_match.group(1).strip()
                 # Clean up and validate

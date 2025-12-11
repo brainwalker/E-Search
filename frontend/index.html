@@ -876,6 +876,12 @@
             font-size: 0.8rem;
         }
 
+        /* Future schedule (different styling) */
+        .schedule-item.future {
+            background: rgba(99, 102, 241, 0.1);
+            border-left: 3px solid var(--accent-primary);
+        }
+
         .schedule-day {
             font-weight: 600;
             color: var(--warning);
@@ -886,9 +892,23 @@
             font-size: 0.75rem;
         }
 
+        .schedule-location-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
         .schedule-location {
             color: var(--text-secondary);
             font-size: 0.8rem;
+        }
+
+        .schedule-times {
+            color: var(--text-primary);
+            font-weight: 500;
+            font-size: 0.75rem;
         }
 
         /* Expired/past time slot styling */
@@ -1269,17 +1289,20 @@
                     </div>
                 </div>
 
-                <!-- Star Rating Filter -->
+                <!-- Rating Filter -->
                 <div class="sidebar-section">
                     <div class="sidebar-section-title">
-                        <span>Rating</span>
+                        <span>Filters</span>
                     </div>
-                    <div class="star-filter" id="starFilter">
-                        <button class="star-btn" data-stars="1" onclick="toggleStarFilter(1, this)">⭐</button>
-                        <button class="star-btn" data-stars="2" onclick="toggleStarFilter(2, this)">⭐⭐</button>
-                        <button class="star-btn" data-stars="3" onclick="toggleStarFilter(3, this)">⭐⭐⭐</button>
-                        <button class="star-btn" data-stars="4" onclick="toggleStarFilter(4, this)">⭐⭐⭐⭐</button>
-                        <button class="star-btn" data-stars="5" onclick="toggleStarFilter(5, this)">⭐⭐⭐⭐⭐</button>
+                    <div class="toggle-row">
+                        <div class="toggle-switch" id="ratingToggle" onclick="toggleRatingFilter()"></div>
+                        <span class="toggle-label">Enable Rating Filter</span>
+                    </div>
+                    <div class="star-filter" id="starFilter" style="display: none; margin-top: 8px;">
+                        <button class="star-btn" data-stars="1" onclick="toggleStarFilter(1, this)">🌸</button>
+                        <button class="star-btn" data-stars="2" onclick="toggleStarFilter(2, this)">🌸🌸</button>
+                        <button class="star-btn" data-stars="3" onclick="toggleStarFilter(3, this)">🌸🌸🌸</button>
+                        <button class="star-btn" data-stars="4" onclick="toggleStarFilter(4, this)">🌸🌸🌸🌸</button>
                     </div>
                     <div class="toggle-row" style="margin-top: 8px;">
                         <div class="toggle-switch" id="hideExpiredToggle" onclick="toggleHideExpired()"></div>
@@ -1287,11 +1310,11 @@
                     </div>
                 </div>
 
-                <!-- Towns filter -->
+                <!-- Cities filter -->
                 <div class="sidebar-section">
                     <div class="sidebar-section-title">
-                        <span>Towns</span>
-                        <button class="select-all-btn" onclick="toggleAllTowns()">Toggle All</button>
+                        <span>Cities</span>
+                        <button class="select-all-btn" onclick="clearAllCities()">Clear All</button>
                     </div>
                     <div class="town-buttons" id="townButtons">
                         <!-- Populated dynamically -->
@@ -1599,29 +1622,38 @@
             }
         }
 
-        // Load towns from schedules
-        let allTowns = [];
-        const torontoSubTowns = ['Downtown', 'Midtown', 'Etobicoke', 'North York'];
+        // City/Town hierarchy
+        let allLocations = [];
+        const cityDefinitions = {
+            'Toronto': {
+                isCityParent: true,
+                towns: ['Downtown', 'Midtown', 'Etobicoke', 'North York']
+            },
+            'Mississauga': { isCityParent: false },
+            'Brampton': { isCityParent: false },
+            'Oakville': { isCityParent: false },
+            'Vaughan': { isCityParent: false }
+        };
 
         async function loadTowns() {
             try {
                 const response = await fetch(`${API_BASE}/api/towns`);
                 const towns = await response.json();
-                allTowns = towns.filter(t => t && t !== 'Unknown' && t !== 'unknown' && t !== '');
+                allLocations = towns.filter(t => t && t !== 'Unknown' && t !== 'unknown' && t !== '');
 
                 const container = document.getElementById('townButtons');
                 container.innerHTML = '';
 
-                if (allTowns.length === 0) {
-                    container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">No towns available</span>';
+                if (allLocations.length === 0) {
+                    container.innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">No locations available</span>';
                     return;
                 }
 
-                // Separate Toronto sub-towns from other towns
-                const torontoTowns = allTowns.filter(t => torontoSubTowns.includes(t));
-                const otherTowns = allTowns.filter(t => !torontoSubTowns.includes(t));
+                // Separate Toronto towns from other cities
+                const torontoTowns = allLocations.filter(t => cityDefinitions.Toronto.towns.includes(t));
+                const otherCities = allLocations.filter(t => !cityDefinitions.Toronto.towns.includes(t));
 
-                // Create Toronto group if we have any Toronto sub-towns
+                // Create Toronto city group with sub-towns
                 if (torontoTowns.length > 0) {
                     const group = document.createElement('div');
                     group.className = 'town-group';
@@ -1629,12 +1661,13 @@
                     const header = document.createElement('div');
                     header.className = 'town-group-header';
 
-                    const groupBtn = document.createElement('button');
-                    groupBtn.className = 'town-group-btn active';
-                    groupBtn.id = 'torontoGroupBtn';
-                    groupBtn.textContent = `Toronto (${torontoTowns.length})`;
-                    groupBtn.addEventListener('click', () => toggleTorontoGroup());
-                    header.appendChild(groupBtn);
+                    const cityBtn = document.createElement('button');
+                    cityBtn.className = 'town-group-btn active';
+                    cityBtn.id = 'torontoCityBtn';
+                    cityBtn.dataset.city = 'Toronto';
+                    cityBtn.textContent = `Toronto (${torontoTowns.length})`;
+                    cityBtn.addEventListener('click', () => selectCity('Toronto'));
+                    header.appendChild(cityBtn);
 
                     const toggleBtn = document.createElement('button');
                     toggleBtn.className = 'town-group-toggle';
@@ -1653,11 +1686,16 @@
                         const btn = document.createElement('button');
                         btn.className = 'town-btn active';
                         btn.dataset.town = town;
-                        btn.dataset.group = 'toronto';
+                        btn.dataset.city = 'Toronto';
                         btn.textContent = town;
                         btn.addEventListener('click', () => {
+                            // First deselect all other cities to ensure only Toronto can be partially selected
+                            const otherCityBtns = document.querySelectorAll('#townButtons .town-btn:not([data-city="Toronto"])');
+                            otherCityBtns.forEach(otherBtn => otherBtn.classList.remove('active'));
+
+                            // Then toggle this Toronto sub-town
                             btn.classList.toggle('active');
-                            updateTorontoGroupState();
+                            updateTorontoCityState();
                             loadListings();
                         });
                         children.appendChild(btn);
@@ -1667,17 +1705,20 @@
                     container.appendChild(group);
                 }
 
-                // Add other towns
-                otherTowns.forEach(town => {
-                    const btn = document.createElement('button');
-                    btn.className = 'town-btn active';
-                    btn.dataset.town = town;
-                    btn.textContent = town;
-                    btn.addEventListener('click', () => {
-                        btn.classList.toggle('active');
-                        loadListings();
-                    });
-                    container.appendChild(btn);
+                // Add other cities as standalone buttons
+                Object.keys(cityDefinitions).forEach(cityName => {
+                    if (cityName === 'Toronto') return; // Already handled above
+
+                    // Check if this city exists in the data
+                    if (otherCities.includes(cityName)) {
+                        const btn = document.createElement('button');
+                        btn.className = 'town-btn';
+                        btn.dataset.city = cityName;
+                        btn.dataset.town = cityName;
+                        btn.textContent = cityName;
+                        btn.addEventListener('click', () => selectCity(cityName));
+                        container.appendChild(btn);
+                    }
                 });
             } catch (error) {
                 console.error('Error loading towns:', error);
@@ -1685,11 +1726,27 @@
             }
         }
 
-        function toggleTorontoGroup() {
-            const children = document.querySelectorAll('#torontoChildren .town-btn');
-            const allActive = Array.from(children).every(btn => btn.classList.contains('active'));
-            children.forEach(btn => btn.classList.toggle('active', !allActive));
-            updateTorontoGroupState();
+        // Select a city and deselect all others
+        function selectCity(cityName) {
+            // Deselect all cities first
+            document.querySelectorAll('#townButtons [data-city]').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            if (cityName === 'Toronto') {
+                // Select Toronto parent and all its towns
+                const cityBtn = document.getElementById('torontoCityBtn');
+                if (cityBtn) cityBtn.classList.add('active');
+
+                document.querySelectorAll('#torontoChildren .town-btn').forEach(btn => {
+                    btn.classList.add('active');
+                });
+            } else {
+                // Select the clicked city
+                const cityBtn = document.querySelector(`[data-city="${cityName}"][data-town="${cityName}"]`);
+                if (cityBtn) cityBtn.classList.add('active');
+            }
+
             loadListings();
         }
 
@@ -1700,27 +1757,27 @@
             toggleBtn.textContent = children.classList.contains('collapsed') ? '▶' : '▼';
         }
 
-        function updateTorontoGroupState() {
+        function updateTorontoCityState() {
             const children = document.querySelectorAll('#torontoChildren .town-btn');
-            const groupBtn = document.getElementById('torontoGroupBtn');
-            if (!groupBtn) return;
+            const cityBtn = document.getElementById('torontoCityBtn');
+            if (!cityBtn) return;
 
             const activeCount = Array.from(children).filter(btn => btn.classList.contains('active')).length;
             const totalCount = children.length;
 
-            groupBtn.classList.remove('active', 'partial');
+            cityBtn.classList.remove('active', 'partial');
             if (activeCount === totalCount) {
-                groupBtn.classList.add('active');
+                cityBtn.classList.add('active');
             } else if (activeCount > 0) {
-                groupBtn.classList.add('partial');
+                cityBtn.classList.add('partial');
             }
         }
 
-        function toggleAllTowns() {
-            const buttons = document.querySelectorAll('#townButtons .town-btn');
-            const allActive = Array.from(buttons).every(btn => btn.classList.contains('active'));
-            buttons.forEach(btn => btn.classList.toggle('active', !allActive));
-            updateTorontoGroupState();
+        function clearAllCities() {
+            // Deselect all cities
+            document.querySelectorAll('#townButtons [data-city]').forEach(btn => {
+                btn.classList.remove('active');
+            });
             loadListings();
         }
 
@@ -1753,22 +1810,38 @@
             try {
                 const params = new URLSearchParams();
 
-                // Sources
+                // Sources - REQUIRED
                 const selectedSources = Array.from(document.querySelectorAll('#sourcesButtons .source-btn.active'))
                     .map(btn => btn.dataset.sourceId);
-                if (selectedSources.length > 0) params.append('source_ids', selectedSources.join(','));
+
+                // Check if no sources selected
+                if (selectedSources.length === 0) {
+                    container.innerHTML = '<div class="no-results">⚠️ Please select at least one source</div>';
+                    document.getElementById('totalListings').textContent = '0';
+                    document.getElementById('activeListings').textContent = '0';
+                    document.getElementById('totalSources').textContent = '0';
+                    return;
+                }
+                params.append('source_ids', selectedSources.join(','));
+
+                // Cities/Towns - REQUIRED
+                const selectedTowns = Array.from(document.querySelectorAll('#townButtons .town-btn.active'))
+                    .map(btn => btn.dataset.town);
+
+                // Check if no cities/towns selected
+                if (selectedTowns.length === 0) {
+                    container.innerHTML = '<div class="no-results">⚠️ Please select at least one city</div>';
+                    document.getElementById('totalListings').textContent = '0';
+                    document.getElementById('activeListings').textContent = '0';
+                    document.getElementById('totalSources').textContent = '0';
+                    return;
+                }
+                params.append('towns', selectedTowns.join(','));
 
                 // Days
                 const selectedDays = Array.from(document.querySelectorAll('.day-btn.active'))
                     .map(btn => btn.dataset.day);
                 if (selectedDays.length > 0) params.append('days_of_week', selectedDays.join(','));
-
-                // Towns filter
-                const selectedTowns = Array.from(document.querySelectorAll('#townButtons .town-btn.active'))
-                    .map(btn => btn.dataset.town);
-                if (selectedTowns.length > 0 && selectedTowns.length < allTowns.length) {
-                    params.append('towns', selectedTowns.join(','));
-                }
 
                 // Star rating filter
                 if (selectedStars.length > 0) {
@@ -1798,7 +1871,7 @@
                     const todaySched = l.schedules?.find(s => s.day_of_week === today);
                     if (!todaySched) return false;
                     if (!todaySched.end_time) return true;
-                    return !isTimePast(todaySched.end_time);
+                    return !isTimePast(todaySched.end_time, todaySched.start_time);
                 }).length;
 
                 // Count unique sources in filtered results
@@ -1840,7 +1913,7 @@
         }
 
         // Check if a time string (e.g., "2:00 PM", "14:00") is in the past
-        function isTimePast(timeStr) {
+        function isTimePast(timeStr, startTimeStr = null) {
             if (!timeStr) return false;
             const now = new Date();
             const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -1860,6 +1933,27 @@
             }
 
             const timeMinutes = hours * 60 + minutes;
+
+            // Handle schedules that cross midnight (e.g., 4:30PM - 2AM)
+            // If end time is in early morning (12AM-6AM) and we have a start time
+            if (startTimeStr && hours >= 0 && hours < 6) {
+                // Parse start time
+                const startMatch = startTimeStr.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM|am|pm)?/i);
+                if (startMatch) {
+                    let startHours = parseInt(startMatch[1]);
+                    const startPeriod = startMatch[3];
+                    if (startPeriod) {
+                        if (startPeriod.toUpperCase() === 'PM' && startHours !== 12) startHours += 12;
+                        if (startPeriod.toUpperCase() === 'AM' && startHours === 12) startHours = 0;
+                    }
+                    // If start time is afternoon/evening (after 12PM), end time is next day
+                    if (startHours >= 12) {
+                        // Add 24 hours to end time for comparison
+                        return (timeMinutes + 24 * 60) < currentMinutes;
+                    }
+                }
+            }
+
             return timeMinutes < currentMinutes;
         }
 
@@ -1870,6 +1964,27 @@
             return listing.schedules.find(s => s.day_of_week === today);
         }
 
+        // Get next available schedule after today
+        function getNextSchedule(listing) {
+            if (!listing.schedules || listing.schedules.length === 0) return null;
+
+            const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            const today = getCurrentDayOfWeek();
+            const todayIndex = dayOrder.indexOf(today);
+
+            // Find the next schedule (looking forward from today)
+            for (let i = 1; i < 7; i++) {
+                const nextDayIndex = (todayIndex + i) % 7;
+                const nextDay = dayOrder[nextDayIndex];
+                const schedule = listing.schedules.find(s => s.day_of_week === nextDay);
+                if (schedule) {
+                    return schedule;
+                }
+            }
+
+            return null;
+        }
+
         function createListingCard(listing) {
             const card = document.createElement('div');
             card.className = 'listing-card';
@@ -1878,7 +1993,7 @@
 
             // Check if today's schedule time slot has passed
             const todaySchedule = getTodaySchedule(listing);
-            const isExpired = todaySchedule && todaySchedule.end_time && isTimePast(todaySchedule.end_time);
+            const isExpired = todaySchedule && todaySchedule.end_time && isTimePast(todaySchedule.end_time, todaySchedule.start_time);
             if (isExpired) {
                 card.classList.add('expired');
             }
@@ -1888,36 +2003,58 @@
                 ? `<img data-src="${images[0]}" class="listing-thumbnail" alt="${listing.name}">`
                 : '';
 
-            // Get star count for display
-            const starCount = listing.tier_rates?.star || 0;
-            const starsDisplay = '🌹'.repeat(starCount);
+            // Get rating for display
+            const ratingCount = listing.tier_rates?.star || 0;
+            const ratingDisplay = '🌸'.repeat(ratingCount);
 
-            let ratesHtml = '';
-            if (listing.tier_rates) {
-                const rates = listing.tier_rates;
-                ratesHtml = `
-                    <div class="rates-section">
-                        <div class="rates-title">${'🌹'.repeat(rates.star || 0)}</div>
-                        ${rates.incall_30min ? `<div class="rate-item"><span>30min</span><span>${rates.incall_30min}</span></div>` : ''}
-                        ${rates.incall_1hr ? `<div class="rate-item"><span>1hr</span><span>${rates.incall_1hr}</span></div>` : ''}
-                    </div>
-                `;
-            }
-
-            // Only show today's schedule with town and time
+            // Show schedule: today's schedule, or next available, or placeholder
             let schedulesHtml = '';
-            if (todaySchedule) {
-                // Get town only (not full location)
-                const town = todaySchedule.town || '';
-                const timeStr = todaySchedule.start_time ? ` @ ${todaySchedule.start_time}` : '';
+            if (todaySchedule && !isExpired) {
+                // Show today's schedule if not expired
+                const town = todaySchedule.location?.town || '';
+                const startTime = todaySchedule.start_time || '';
+                const endTime = todaySchedule.end_time || '';
+                const timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || 'Available');
+
                 schedulesHtml = `
                     <div class="schedule-section">
                         <div class="schedule-title">📅 Today</div>
                         <div class="schedule-item">
-                            <div class="schedule-location">📍 ${town || 'Available'}${timeStr}</div>
+                            <div class="schedule-location-row">
+                                <span class="schedule-location">📍 ${town || 'Available'}</span>
+                                <span class="schedule-times">${timeRange}</span>
+                            </div>
                         </div>
                     </div>
                 `;
+            } else {
+                // Today's schedule expired or doesn't exist, show next available
+                const nextSchedule = getNextSchedule(listing);
+                if (nextSchedule) {
+                    const town = nextSchedule.location?.town || '';
+                    const startTime = nextSchedule.start_time || '';
+                    const endTime = nextSchedule.end_time || '';
+                    const timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || 'Available');
+
+                    schedulesHtml = `
+                        <div class="schedule-section">
+                            <div class="schedule-title">📅 ${nextSchedule.day_of_week}</div>
+                            <div class="schedule-item future">
+                                <div class="schedule-location-row">
+                                    <span class="schedule-location">📍 ${town || 'Available'}</span>
+                                    <span class="schedule-times">${timeRange}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // No schedules available at all
+                    schedulesHtml = `
+                        <div class="schedule-section">
+                            <div class="schedule-title" style="color: var(--text-muted); font-style: italic;">No schedule available</div>
+                        </div>
+                    `;
+                }
             }
 
             card.innerHTML = `
@@ -1927,14 +2064,13 @@
                         <button class="listing-action-btn delete" onclick="event.stopPropagation(); deleteListing(${listing.id})" title="Delete">🗑️</button>
                     </div>
                     <div class="listing-name">${listing.name}</div>
-                    <span class="listing-tier">${listing.tier || 'Standard'} ${starsDisplay}</span>
+                    ${ratingDisplay ? `<span class="listing-tier">${ratingDisplay}</span>` : ''}
                 </div>
                 <div class="listing-body">
                     ${imageHtml}
                     ${listing.age ? `<div class="listing-detail"><span class="detail-label">Age</span><span class="detail-value">${listing.age}</span></div>` : ''}
                     ${listing.height ? `<div class="listing-detail"><span class="detail-label">Height</span><span class="detail-value">${listing.height}</span></div>` : ''}
                     ${listing.nationality ? `<div class="listing-detail"><span class="detail-label">Nationality</span><span class="detail-value">${listing.nationality}</span></div>` : ''}
-                    ${ratesHtml}
                     ${schedulesHtml}
                     ${getFullProfileUrl(listing) ? `<button class="view-profile-btn" onclick="event.stopPropagation(); window.open('${getFullProfileUrl(listing)}', '_blank')">View Profile</button>` : ''}
                 </div>
@@ -1988,22 +2124,53 @@
             loadListings(); // Auto-apply filter
         }
 
+        // Toggle rating filter visibility
+        let ratingFilterEnabled = false;
+        function toggleRatingFilter() {
+            ratingFilterEnabled = !ratingFilterEnabled;
+            const toggle = document.getElementById('ratingToggle');
+            const filterDiv = document.getElementById('starFilter');
+
+            toggle.classList.toggle('active', ratingFilterEnabled);
+            filterDiv.style.display = ratingFilterEnabled ? 'flex' : 'none';
+
+            // If disabling, clear all star filters
+            if (!ratingFilterEnabled) {
+                selectedStars = [];
+                document.querySelectorAll('.star-btn').forEach(btn => btn.classList.remove('active'));
+                loadListings();
+            }
+        }
+
         function applyFilters() {
             loadListings();
         }
 
         function clearFilters() {
+            // Clear search
             document.getElementById('searchInput').value = '';
+
+            // Clear hide expired
             hideExpired = false;
             document.getElementById('hideExpiredToggle').classList.remove('active');
+
+            // Clear days
             document.querySelectorAll('.day-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('#sourcesButtons .source-btn').forEach(btn => btn.classList.add('active'));
-            document.querySelectorAll('#townButtons .town-btn').forEach(btn => btn.classList.add('active'));
-            updateTorontoGroupState();
-            // Clear star filters
+
+            // Clear all sources
+            document.querySelectorAll('#sourcesButtons .source-btn').forEach(btn => btn.classList.remove('active'));
+
+            // Clear all cities
+            clearAllCities();
+
+            // Clear rating filter
+            ratingFilterEnabled = false;
+            document.getElementById('ratingToggle').classList.remove('active');
+            document.getElementById('starFilter').style.display = 'none';
             selectedStars = [];
             document.querySelectorAll('.star-btn').forEach(btn => btn.classList.remove('active'));
-            loadListings();
+
+            // Don't call loadListings() here - clearAllCities() already does
         }
 
         function toggleAllSources() {
@@ -2098,16 +2265,18 @@
                 </div>
             ` : '';
 
-            let ratesHtml = '';
+            // Pricing info without $ signs or "rate" word
+            let pricingHtml = '';
             if (listing.tier_rates) {
                 const rates = listing.tier_rates;
-                ratesHtml = `
+                const removeDollar = (str) => str ? str.replace(/\$/g, '') : '';
+                pricingHtml = `
                     <div class="modal-section">
-                        <h3>💰 ${rates.tier} Rates (⭐${rates.star})</h3>
-                        ${rates.incall_30min ? `<div class="modal-detail"><strong>30min:</strong> ${rates.incall_30min}</div>` : ''}
-                        ${rates.incall_45min ? `<div class="modal-detail"><strong>45min:</strong> ${rates.incall_45min}</div>` : ''}
-                        ${rates.incall_1hr ? `<div class="modal-detail"><strong>1hr:</strong> ${rates.incall_1hr}</div>` : ''}
-                        ${rates.outcall_per_hr ? `<div class="modal-detail"><strong>Outcall:</strong> ${rates.outcall_per_hr}</div>` : ''}
+                        <h3>⏰ Duration</h3>
+                        ${rates.incall_30min ? `<div class="modal-detail"><strong>30min:</strong> ${removeDollar(rates.incall_30min)}</div>` : ''}
+                        ${rates.incall_45min ? `<div class="modal-detail"><strong>45min:</strong> ${removeDollar(rates.incall_45min)}</div>` : ''}
+                        ${rates.incall_1hr ? `<div class="modal-detail"><strong>1hr:</strong> ${removeDollar(rates.incall_1hr)}</div>` : ''}
+                        ${rates.outcall_per_hr ? `<div class="modal-detail"><strong>Outcall/hr:</strong> ${removeDollar(rates.outcall_per_hr)}</div>` : ''}
                     </div>
                 `;
             }
@@ -2128,10 +2297,14 @@
                 `;
             }
 
+            // Get rating for modal header
+            const modalRatingCount = listing.tier_rates?.star || 0;
+            const modalRatingDisplay = modalRatingCount > 0 ? '🌸'.repeat(modalRatingCount) : '';
+
             document.getElementById('modalContent').innerHTML = `
                 <div class="modal-header">
                     <h2>${listing.name}</h2>
-                    <span class="modal-tier">${listing.tier || 'Standard'}</span>
+                    ${modalRatingDisplay ? `<span class="modal-tier">${modalRatingDisplay}</span>` : ''}
                     <span class="modal-close" onclick="closeModal()">&times;</span>
                 </div>
                 ${galleryHtml}
@@ -2147,7 +2320,7 @@
                         ${listing.eye_color ? `<div class="modal-detail"><strong>Eyes:</strong> ${listing.eye_color}</div>` : ''}
                         ${listing.service_type ? `<div class="modal-detail"><strong>Service:</strong> ${listing.service_type}</div>` : ''}
                     </div>
-                    ${ratesHtml}
+                    ${pricingHtml}
                     ${schedulesHtml}
                     ${getFullProfileUrl(listing) ? `
                         <button class="view-profile-btn" onclick="window.open('${getFullProfileUrl(listing)}', '_blank')" style="margin-top: 16px;">
