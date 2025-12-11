@@ -292,11 +292,17 @@
         .top-bar-content {
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: space-between;
             gap: 20px;
             max-width: 1400px;
             margin: 0 auto;
             position: relative;
+        }
+
+        .top-bar-left {
+            display: flex;
+            gap: 12px;
+            align-items: center;
         }
 
         .days-filter {
@@ -351,8 +357,6 @@
         }
 
         .top-bar-actions {
-            position: absolute;
-            right: 0;
             display: flex;
             gap: 10px;
             align-items: center;
@@ -495,16 +499,6 @@
             font-size: 0.75rem;
         }
 
-        /* Stats Bar - Compact */
-        .stats-bar {
-            display: flex;
-            gap: 12px;
-            padding: 12px 20px;
-            background: var(--bg-primary);
-            border-bottom: 1px solid var(--border-color);
-            max-width: 1400px;
-            margin: 0 auto;
-        }
 
         .stat-item {
             display: flex;
@@ -1795,12 +1789,19 @@
                 grid-template-columns: 1fr;
             }
 
-            .top-bar-actions {
-                position: static;
-            }
-
             .top-bar-content {
                 flex-direction: column;
+                gap: 12px;
+            }
+
+            .top-bar-left {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .top-bar-actions {
+                width: 100%;
+                justify-content: center;
             }
 
             .day-btn {
@@ -1900,33 +1901,30 @@
             <!-- Sticky Top Bar with Days -->
             <div class="top-bar">
                 <div class="top-bar-content">
+                    <div class="top-bar-left">
+                        <div class="stat-item">
+                            <span class="stat-value" id="totalListings">0</span>
+                            <span class="stat-label">Total</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="activeListings">0</span>
+                            <span class="stat-label">Active</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="totalSources">0</span>
+                            <span class="stat-label">Sources</span>
+                        </div>
+                    </div>
                     <div class="days-filter" id="daysFilter">
                         <!-- Populated dynamically -->
                     </div>
                     <div class="top-bar-actions">
-                        <a href="database.html" class="header-link">📊 Database</a>
+                        <button class="image-toggle-btn" id="imageToggleBtn" onclick="toggleImages()">
+                            <span id="imageToggleIcon">🖼️</span>
+                            <span id="imageToggleText">Show Images</span>
+                        </button>
                     </div>
                 </div>
-            </div>
-
-            <!-- Compact Stats Bar -->
-            <div class="stats-bar" id="statsBar">
-                <div class="stat-item">
-                    <span class="stat-value" id="totalListings">0</span>
-                    <span class="stat-label">Total</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-value" id="activeListings">0</span>
-                    <span class="stat-label">Active</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-value" id="totalSources">0</span>
-                    <span class="stat-label">Sources</span>
-                </div>
-                <button class="image-toggle-btn" id="imageToggleBtn" onclick="toggleImages()">
-                    <span id="imageToggleIcon">🖼️</span>
-                    <span id="imageToggleText">Show Images</span>
-                </button>
             </div>
 
             <!-- Listings -->
