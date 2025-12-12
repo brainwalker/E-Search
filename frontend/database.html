@@ -179,6 +179,106 @@
             gap: 12px;
         }
 
+        /* Scrape Status Banner */
+        .scrape-status-banner {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow);
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .scrape-status-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .scrape-status-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: white;
+        }
+
+        .scrape-status-icon {
+            font-size: 1.2rem;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .scrape-status-title {
+            font-weight: 600;
+            font-size: 1rem;
+            flex: 1;
+        }
+
+        .scrape-status-close {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.3rem;
+            line-height: 1;
+            transition: all 0.2s ease;
+        }
+
+        .scrape-status-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .scrape-status-details {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .scrape-stat {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            color: white;
+            font-size: 0.9rem;
+        }
+
+        .scrape-stat .stat-label {
+            opacity: 0.9;
+        }
+
+        .scrape-stat .stat-new {
+            color: #4ade80;
+            font-weight: 600;
+        }
+
+        .scrape-stat .stat-updated {
+            color: #60a5fa;
+            font-weight: 600;
+        }
+
+        .scrape-stat .stat-errors {
+            color: #fca5a5;
+            font-weight: 600;
+        }
+
         .offline-banner .retry-btn {
             padding: 8px 14px;
             border: none;
@@ -1179,6 +1279,24 @@
             <button class="retry-btn" onclick="manualRetry()">Retry now</button>
         </div>
 
+        <!-- Scrape Status Banner -->
+        <div id="scrapeStatusBanner" class="scrape-status-banner" style="display: none;">
+            <div class="scrape-status-content">
+                <div class="scrape-status-header">
+                    <span class="scrape-status-icon">🔄</span>
+                    <span class="scrape-status-title">Scraping in progress...</span>
+                    <button class="scrape-status-close" onclick="closeScrapeStatus()">&times;</button>
+                </div>
+                <div class="scrape-status-details">
+                    <div class="scrape-stat"><span class="stat-label">Source:</span> <span id="scrapingSource">-</span></div>
+                    <div class="scrape-stat"><span class="stat-label">Progress:</span> <span id="scrapingProgress">0/0</span></div>
+                    <div class="scrape-stat"><span class="stat-label">New:</span> <span id="scrapingNew" class="stat-new">0</span></div>
+                    <div class="scrape-stat"><span class="stat-label">Updated:</span> <span id="scrapingUpdated" class="stat-updated">0</span></div>
+                    <div class="scrape-stat"><span class="stat-label">Errors:</span> <span id="scrapingErrors" class="stat-errors">0</span></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Content Layout -->
         <div class="main-content">
             <!-- Sidebar Toggle Button -->
@@ -1546,6 +1664,34 @@
             return nameLower.replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
         }
 
+        // Parse progress from log lines during scraping
+        function parseProgressFromLogs(logs, sourceKey) {
+            const stats = { current: 0, total: 0, new: 0, updated: 0, errors: 0 };
+            const sourceUpper = sourceKey.toUpperCase();
+
+            // Process logs in reverse to get latest state first
+            for (let i = logs.length - 1; i >= 0; i--) {
+                const line = logs[i];
+
+                // Only process lines for this source
+                if (!line.includes(`scraper.${sourceUpper}`) && !line.includes(`scraper.${sourceKey}`)) continue;
+
+                // Match progress pattern: [53/53] Processing
+                const progressMatch = line.match(/\[(\d+)\/(\d+)\]\s*Processing/);
+                if (progressMatch && stats.total === 0) {
+                    stats.current = parseInt(progressMatch[1]);
+                    stats.total = parseInt(progressMatch[2]);
+                }
+
+                // Count new/updated from individual entries
+                if (line.includes('[NEW]')) stats.new++;
+                if (line.includes('[UPD]')) stats.updated++;
+                if (line.includes('[ERR]') || line.includes('ERROR')) stats.errors++;
+            }
+
+            return stats;
+        }
+
         // Scrape a single source
         async function scrapeSource(apiName, btn) {
             if (btn.classList.contains('scraping')) return;
@@ -1554,20 +1700,110 @@
             const originalText = btn.innerHTML;
             btn.innerHTML = `⏳ Scraping...`;
 
+            showScrapeStatus(apiName.toUpperCase());
+
+            // Start polling logs for progress updates
+            let progressPollInterval = null;
+            const pollProgress = async () => {
+                try {
+                    const logsResponse = await fetch(`${API_BASE}/db/logs?lines=100`, {
+                        cache: 'no-cache',
+                        headers: { 'Cache-Control': 'no-cache' }
+                    });
+                    if (logsResponse.ok) {
+                        const logsData = await logsResponse.json();
+                        if (logsData.logs && logsData.logs.length > 0) {
+                            const stats = parseProgressFromLogs(logsData.logs, apiName);
+                            if (stats.total > 0) {
+                                document.getElementById('scrapingProgress').textContent = `${stats.current}/${stats.total}`;
+                                document.getElementById('scrapingNew').textContent = stats.new;
+                                document.getElementById('scrapingUpdated').textContent = stats.updated;
+                                document.getElementById('scrapingErrors').textContent = stats.errors;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // Silently ignore polling errors
+                }
+            };
+
+            // Poll every 2 seconds during scraping
+            progressPollInterval = setInterval(pollProgress, 2000);
+            // Also poll immediately
+            pollProgress();
+
             try {
                 const response = await fetch(`${API_BASE}/api/scrape/${apiName}`, { method: 'POST' });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const result = await response.json();
+
+                // Stop polling once complete
+                if (progressPollInterval) clearInterval(progressPollInterval);
+
+                updateScrapeStatus(result);
+                completeScrapeStatus(result);
+
                 btn.innerHTML = `✓ Done!`;
                 setTimeout(() => { btn.innerHTML = originalText; }, 2000);
                 await loadStats();
                 if (currentTable === 'listings') await loadTable(currentTable, currentPage);
             } catch (error) {
+                // Stop polling on error
+                if (progressPollInterval) clearInterval(progressPollInterval);
+
+                const errorResult = { errors: 1, new: 0, updated: 0, total: 0 };
+                updateScrapeStatus(errorResult);
+                completeScrapeStatus(errorResult);
+
                 btn.innerHTML = `✗ Error`;
                 setTimeout(() => { btn.innerHTML = originalText; }, 2000);
             } finally {
                 btn.classList.remove('scraping');
             }
+        }
+
+        // Scrape Status Banner Functions
+        function showScrapeStatus(source) {
+            const banner = document.getElementById('scrapeStatusBanner');
+            document.getElementById('scrapingSource').textContent = source;
+            document.getElementById('scrapingProgress').textContent = '0/0';
+            document.getElementById('scrapingNew').textContent = '0';
+            document.getElementById('scrapingUpdated').textContent = '0';
+            document.getElementById('scrapingErrors').textContent = '0';
+            banner.style.display = 'block';
+        }
+
+        function updateScrapeStatus(data) {
+            if (data.source) document.getElementById('scrapingSource').textContent = data.source;
+            if (data.total !== undefined) {
+                const processed = (data.new || 0) + (data.updated || 0) + (data.errors || 0);
+                document.getElementById('scrapingProgress').textContent = `${processed}/${data.total}`;
+            }
+            if (data.new !== undefined) document.getElementById('scrapingNew').textContent = data.new;
+            if (data.updated !== undefined) document.getElementById('scrapingUpdated').textContent = data.updated;
+            if (data.errors !== undefined) document.getElementById('scrapingErrors').textContent = data.errors;
+        }
+
+        function closeScrapeStatus() {
+            document.getElementById('scrapeStatusBanner').style.display = 'none';
+        }
+
+        function completeScrapeStatus(data) {
+            const banner = document.getElementById('scrapeStatusBanner');
+            const icon = banner.querySelector('.scrape-status-icon');
+            const title = banner.querySelector('.scrape-status-title');
+
+            if (data.errors > 0) {
+                icon.textContent = '⚠️';
+                title.textContent = 'Scraping completed with errors';
+            } else {
+                icon.textContent = '✅';
+                title.textContent = 'Scraping completed successfully!';
+            }
+
+            setTimeout(() => {
+                closeScrapeStatus();
+            }, 5000);
         }
 
         // Delete source data
@@ -1829,7 +2065,6 @@
                         html += `<td class="action-cell sticky-col sticky-actions">
                             <button class="action-btn refresh" onclick="refreshSingleListing(${rowId})" title="Refresh">🔄</button>
                             <button class="action-btn edit" onclick="editSingleRow('listings', ${rowId})" title="Edit">✏️</button>
-                            <button class="action-btn delete" onclick="deleteSingleListing(${rowId})" title="Delete">🗑️</button>
                         </td>`;
                     } else if (data.table === 'locations') {
                         html += `<td class="action-cell sticky-col sticky-actions">
@@ -2186,10 +2421,11 @@
             }
 
             // Regular log classification
-            if (line.includes('ERROR') || line.includes('CRITICAL')) className = 'error';
+            if (line.includes('ERROR') || line.includes('CRITICAL') || line.includes('errors)')) className = 'error';
             else if (line.includes('WARNING') || line.includes('WARN')) className = 'warning';
             else if (line.includes('INFO')) className = 'info';
             else if (line.includes('DEBUG')) className = 'debug';
+            else if (line.includes('Progress:') || line.includes('❯❯❯') || line.includes('✅')) className = 'info';
 
             const div = document.createElement('div');
             div.textContent = line;

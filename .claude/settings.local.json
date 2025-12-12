@@ -26,7 +26,9 @@
       "Bash(git fetch:*)",
       "Bash(git branch:*)",
       "Bash(git checkout:*)",
-      "Bash(git rev-parse:*)"
+      "Bash(git rev-parse:*)",
+      "Bash(git stash:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

@@ -258,9 +258,9 @@ class SFTScraper(BaseScraper):
         self.logger.debug(f"Fetching profile: {full_url}")
 
         soup = await self.crawler.fetch_soup(full_url)
-        return self._parse_profile(soup)
+        return self._parse_profile(soup, profile_url)
 
-    def _parse_profile(self, soup: BeautifulSoup) -> Dict[str, Any]:
+    def _parse_profile(self, soup: BeautifulSoup, profile_slug: str = "") -> Dict[str, Any]:
         """Parse profile page HTML."""
         content = soup.find('div', class_='content') or soup.find('body') or soup
         text = content.get_text()
@@ -348,6 +348,9 @@ class SFTScraper(BaseScraper):
         if schedules:
             profile['schedules'] = schedules
 
+        # Use base class method for color-coded field logging
+        self.log_profile_extraction(profile_slug, profile)
+
         return profile
 
     def _parse_profile_schedules(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
@@ -413,7 +416,8 @@ class SFTScraper(BaseScraper):
                     'end_time': end_time,
                 })
 
-        self.logger.debug(f"Extracted {len(schedules)} schedule(s) from profile page")
+        if schedules:
+            self.logger.debug(f"Extracted {len(schedules)} schedule(s) from profile page")
         return schedules
 
     async def run(self):

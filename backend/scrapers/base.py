@@ -15,6 +15,50 @@ import json
 
 logger = logging.getLogger(__name__)
 
+# ANSI color codes for terminal output
+class Colors:
+    """ANSI color codes for colorized logging."""
+    RESET = '\033[0m'
+    BOLD = '\033[1m'
+    DIM = '\033[2m'
+
+    # Colors
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    MAGENTA = '\033[95m'
+    GRAY = '\033[90m'
+
+    @staticmethod
+    def green(text):
+        return f"{Colors.GREEN}{text}{Colors.RESET}"
+
+    @staticmethod
+    def yellow(text):
+        return f"{Colors.YELLOW}{text}{Colors.RESET}"
+
+    @staticmethod
+    def red(text):
+        return f"{Colors.RED}{text}{Colors.RESET}"
+
+    @staticmethod
+    def blue(text):
+        return f"{Colors.BLUE}{text}{Colors.RESET}"
+
+    @staticmethod
+    def cyan(text):
+        return f"{Colors.CYAN}{text}{Colors.RESET}"
+
+    @staticmethod
+    def gray(text):
+        return f"{Colors.GRAY}{text}{Colors.RESET}"
+
+    @staticmethod
+    def bold(text):
+        return f"{Colors.BOLD}{text}{Colors.RESET}"
+
 
 class ScraperType(Enum):
     """Types of scrapers based on site requirements."""
@@ -201,6 +245,64 @@ class BaseScraper(ABC):
         """
         pass
 
+    def log_profile_extraction(self, profile_slug: str, profile_data: Dict, old_listing: Optional[Any] = None):
+        """
+        Log extracted profile fields with color coding.
+
+        Args:
+            profile_slug: Profile identifier
+            profile_data: Newly extracted profile data
+            old_listing: Existing listing from database (if updating)
+        """
+        # All possible fields we track
+        all_fields = ['age', 'nationality', 'ethnicity', 'height', 'weight', 'bust', 'bust_type',
+                      'measurements', 'hair_color', 'eye_color', 'service_type', 'tier', 'images',
+                      'tags', 'schedules']
+
+        extracted = []
+        missing = []
+        updated = []
+        unchanged = []
+
+        for field in all_fields:
+            if field in profile_data and profile_data[field]:
+                # Field was extracted
+                if old_listing:
+                    old_value = getattr(old_listing, field, None)
+                    new_value = profile_data[field]
+
+                    # Convert for comparison
+                    if field == 'images' and isinstance(old_value, str):
+                        try:
+                            old_value = json.loads(old_value) if old_value else None
+                        except:
+                            old_value = None
+
+                    if old_value != new_value and old_value is not None:
+                        updated.append(Colors.green(field))  # Changed
+                    elif old_value is None:
+                        extracted.append(Colors.green(field))  # New field
+                    else:
+                        unchanged.append(field)  # Same value
+                else:
+                    extracted.append(Colors.green(field))  # New listing
+            else:
+                missing.append(Colors.gray(field))
+
+        # Build output - captured fields on one line, missing on another
+        captured = extracted + updated + unchanged
+        if captured:
+            # Strip color codes for plain text readability
+            captured_plain = [f.replace(Colors.GREEN, '').replace(Colors.RESET, '') for f in captured]
+            self.logger.info(f"   ➤ {profile_slug}: {', '.join(captured_plain)}")
+        else:
+            self.logger.info(f"   ➤ {profile_slug}: no data captured")
+
+        if missing:
+            # Strip color codes for plain text readability
+            missing_plain = [f.replace(Colors.GRAY, '').replace(Colors.RESET, '') for f in missing]
+            self.logger.info(f"   ✘ missing: {', '.join(missing_plain)}")
+
     def normalize_listing(self, schedule_item: ScheduleItem, profile_data: Dict, all_schedule_items: Optional[List[ScheduleItem]] = None) -> ScrapedListing:
         """
         Convert raw scraped data to standardized ScrapedListing.
@@ -268,16 +370,16 @@ class BaseScraper(ABC):
         target_date = today + timedelta(days=days_ahead)
         return target_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    async def save_listing(self, listing: ScrapedListing) -> bool:
+    async def save_listing(self, listing: ScrapedListing) -> tuple[bool, Optional[Any]]:
         """
         Save or update a listing in the database.
 
         Override this method for custom database logic.
-        Returns True if new, False if updated.
+        Returns (is_new, old_listing) tuple.
         """
         if not self.db:
             self.logger.warning("No database session - skipping save")
-            return False
+            return (False, None)
 
         # Import here to avoid circular imports
         from api.database import Listing, Schedule, Source, Tag, Location
@@ -333,6 +435,15 @@ class BaseScraper(ABC):
         self.db.flush()
 
         # Handle schedules
+        # IMPORTANT: Delete all existing schedules first to avoid duplicates
+        # Schedules change frequently (daily/weekly) and we want fresh data
+        if not is_new:
+            deleted_count = self.db.query(Schedule).filter_by(
+                listing_id=db_listing.id
+            ).delete(synchronize_session=False)
+            if deleted_count > 0:
+                self.logger.debug(f"Deleted {deleted_count} old schedule(s) for {listing.name}")
+        
         for schedule_data in listing.schedules:
             # Skip OUTCALL schedules for all sources
             location_str = schedule_data.get('location', 'Unknown')
@@ -544,28 +655,16 @@ class BaseScraper(ABC):
             day_of_week = schedule_data.get('day_of_week')
             schedule_date = self._get_date_from_day_of_week(day_of_week) if day_of_week else None
 
-            # Check for existing schedule
-            existing_schedule = self.db.query(Schedule).filter_by(
+            # Create new schedule (old schedules were deleted above)
+            new_schedule = Schedule(
                 listing_id=db_listing.id,
                 day_of_week=day_of_week,
-                location_id=location_id
-            ).first()
-
-            if existing_schedule:
-                existing_schedule.date = schedule_date
-                existing_schedule.start_time = schedule_data.get('start_time')
-                existing_schedule.end_time = schedule_data.get('end_time')
-                existing_schedule.is_expired = False
-            else:
-                new_schedule = Schedule(
-                    listing_id=db_listing.id,
-                    day_of_week=day_of_week,
-                    date=schedule_date,
-                    location_id=location_id,
-                    start_time=schedule_data.get('start_time'),
-                    end_time=schedule_data.get('end_time'),
-                )
-                self.db.add(new_schedule)
+                date=schedule_date,
+                location_id=location_id,
+                start_time=schedule_data.get('start_time'),
+                end_time=schedule_data.get('end_time'),
+            )
+            self.db.add(new_schedule)
 
         # Handle tags
         existing_tag_ids = {t.id for t in db_listing.tags}
@@ -587,7 +686,7 @@ class BaseScraper(ABC):
             # Flush to get IDs but don't commit yet
             self.db.flush()
 
-        return is_new
+        return (is_new, existing)
 
     def _flush_pending_commits(self):
         """Commit any pending changes. Call at end of scrape."""
@@ -628,25 +727,34 @@ class BaseScraper(ABC):
                     # Get first schedule item for basic info (name, tier, etc.)
                     schedule_items_for_profile = profiles_schedules[profile_url]
                     first_item = schedule_items_for_profile[0]
-                    self.logger.info(f"[{idx}/{len(unique_profiles)}] Scraping {first_item.name} ({profile_url}) - {len(schedule_items_for_profile)} schedule(s)")
+
+                    # New format: ❯❯❯ separator line
+                    self.logger.info(f"\n{Colors.cyan('❯❯❯')}")
+                    self.logger.info(f"{Colors.bold(f'[{idx}/{len(unique_profiles)}]')} Processing {Colors.bold(first_item.name)} {Colors.gray(f'({profile_url})')} - {len(schedule_items_for_profile)} schedule(s)")
 
                     # Scrape profile
                     profile_data = await self.scrape_profile(profile_url)
+
+                    # Log extracted fields with color coding
+                    # Note: This logs before save, so we don't have old_listing yet
+                    # The scraper-specific _parse_profile methods will handle detailed field logging
 
                     # Normalize - pass all schedule items
                     listing = self.normalize_listing(first_item, profile_data, schedule_items_for_profile)
 
                     # Save
-                    is_new = await self.save_listing(listing)
+                    is_new, old_listing = await self.save_listing(listing)
 
                     if is_new:
                         self.result.new += 1
+                        self.logger.info(f"   {Colors.green('[NEW]')} {first_item.name}: created new listing")
                     else:
                         self.result.updated += 1
+                        self.logger.info(f"   {Colors.blue('[UPD]')} {first_item.name}: updated existing listing")
 
-                    # Progress update every 5 profiles
-                    if idx % 5 == 0:
-                        self.logger.info(f"Progress: {idx}/{len(unique_profiles)} profiles scraped")
+                    # Progress update every 10 profiles
+                    if idx % 10 == 0:
+                        self.logger.info(f"\n{Colors.bold('Progress')}: {idx}/{len(unique_profiles)} profiles ({Colors.green(f'{self.result.new} new')}, {Colors.blue(f'{self.result.updated} updated')}, {Colors.red(f'{self.result.errors} errors')})")
 
                 except Exception as e:
                     self.result.errors += 1
@@ -654,7 +762,8 @@ class BaseScraper(ABC):
                         'profile_url': profile_url,
                         'error': str(e),
                     })
-                    self.logger.error(f"Error scraping {profile_url}: {e}")
+                    profile_name = schedule_items_for_profile[0].name if profile_url in profiles_schedules else profile_url
+                    self.logger.error(f"   {Colors.red('[ERR]')} {profile_name}: {str(e)}")
                     # Continue to next profile instead of failing entire scrape
 
             # Flush any remaining pending commits

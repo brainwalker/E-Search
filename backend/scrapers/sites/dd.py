@@ -12,7 +12,6 @@ Site structure:
 import re
 import json
 import html
-import logging
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -100,16 +99,20 @@ def parse_dd_location(location_str: str) -> Tuple[Optional[str], Optional[str]]:
     return (location_str, "unknown")
 
 
-def parse_dd_date(date_str: str) -> Optional[str]:
+def parse_dd_date(date_str: str, filter_past: bool = True) -> Optional[str]:
     """
     Parse DD date string to get day of week.
+    
+    Optionally filters out past dates to avoid duplicate schedules
+    for the same day of week (e.g., "Sun, Dec 07" vs "Sun, Dec 14").
 
     Examples:
         "Mon, Dec 08" -> "Monday"
         "Fri, Dec 12" -> "Friday"
+        "Sun, Dec 07" -> None (if past and filter_past=True)
 
     Returns:
-        Full day name or None
+        Full day name or None (if date is in the past and filter_past=True)
     """
     if not date_str:
         return None
@@ -124,12 +127,51 @@ def parse_dd_date(date_str: str) -> Optional[str]:
         'sun': 'Sunday',
     }
 
-    date_str = date_str.strip().lower()
+    date_str_clean = date_str.strip().lower()
+    
+    # Find the day of week
+    day_of_week = None
     for abbrev, full in day_map.items():
-        if date_str.startswith(abbrev):
-            return full
-
-    return None
+        if date_str_clean.startswith(abbrev):
+            day_of_week = full
+            break
+    
+    if not day_of_week:
+        return None
+    
+    # Filter out past dates if requested
+    if filter_past:
+        # Try to parse the date to check if it's in the past
+        # Format: "Mon, Dec 08" or "Sun, Dec 14"
+        match = re.search(r'([a-z]{3})\s+(\d{1,2})', date_str_clean)
+        if match:
+            month_abbrev = match.group(1)
+            day_num = int(match.group(2))
+            
+            month_map = {
+                'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4,
+                'may': 5, 'jun': 6, 'jul': 7, 'aug': 8,
+                'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+            }
+            
+            month_num = month_map.get(month_abbrev)
+            if month_num:
+                today = datetime.now()
+                # Assume current year for the date
+                year = today.year
+                # Handle year rollover (e.g., current month is Dec, date is Jan)
+                if month_num < today.month - 6:
+                    year += 1
+                
+                try:
+                    parsed_date = datetime(year, month_num, day_num)
+                    # Allow today and future dates
+                    if parsed_date.date() < today.date():
+                        return None  # Skip past dates
+                except ValueError:
+                    pass  # Invalid date, proceed with day_of_week
+    
+    return day_of_week
 
 
 def parse_dd_time(time_str: str) -> Tuple[Optional[str], Optional[str]]:
@@ -618,9 +660,8 @@ class DDScraper(BaseScraper):
                 profile['schedules'] = schedules
                 self.logger.debug(f"Extracted {len(schedules)} schedule(s) from profile page for {profile_slug}")
 
-        # Log extracted profile fields (single consolidated log)
-        extracted = [k for k, v in profile.items() if v]
-        self.logger.info(f"   ✓ {profile_slug}: extracted {', '.join(extracted) if extracted else 'no data'}")
+        # Use base class method for color-coded field logging
+        self.log_profile_extraction(profile_slug, profile)
 
         return profile
     # normalize_listing uses base class implementation

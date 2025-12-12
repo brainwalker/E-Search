@@ -23,13 +23,27 @@ settings.log_dir.mkdir(exist_ok=True)
 
 # Configure logging using settings
 # Use basicConfig but prevent duplicate logs by configuring child loggers
+import re
+
+# Custom formatter to strip ANSI color codes from file logs
+class ColorStripFormatter(logging.Formatter):
+    """Formatter that strips ANSI color codes from log messages."""
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+    def format(self, record):
+        message = super().format(record)
+        return self.ansi_escape.sub('', message)
+
+# Setup logging with color support for console, stripped for file
+file_handler = logging.FileHandler(settings.log_file, encoding='utf-8')
+file_handler.setFormatter(ColorStripFormatter(settings.log_format))
+
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter(settings.log_format))
+
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper()),
-    format=settings.log_format,
-    handlers=[
-        logging.FileHandler(settings.log_file, encoding='utf-8'),
-        logging.StreamHandler()
-    ],
+    handlers=[file_handler, console_handler],
     force=True  # Override any existing configuration
 )
 
@@ -40,8 +54,15 @@ scraper_logger.propagate = False
 # Add handlers directly to scraper logger so messages appear once
 # Only add handlers if not already present (prevents duplicates on module reload)
 if not scraper_logger.handlers:
-    scraper_logger.addHandler(logging.FileHandler(settings.log_file, encoding='utf-8'))
-    scraper_logger.addHandler(logging.StreamHandler())
+    # File handler with color stripping
+    scraper_file_handler = logging.FileHandler(settings.log_file, encoding='utf-8')
+    scraper_file_handler.setFormatter(ColorStripFormatter(settings.log_format))
+    scraper_logger.addHandler(scraper_file_handler)
+
+    # Console handler with colors
+    scraper_console_handler = logging.StreamHandler()
+    scraper_console_handler.setFormatter(logging.Formatter(settings.log_format))
+    scraper_logger.addHandler(scraper_console_handler)
 scraper_logger.setLevel(getattr(logging, settings.log_level.upper()))
 
 logger = logging.getLogger(__name__)
