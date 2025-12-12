@@ -92,10 +92,12 @@ uvicorn_access_logger.addFilter(PollingEndpointFilter())
 # Global shutdown event
 shutdown_event = asyncio.Event()
 
-# Global tier cache with TTL
+# Global caches with TTL
 _tier_cache: dict = {}
 _tier_cache_timestamp: float = 0
-TIER_CACHE_TTL_SECONDS = 300  # 5 minutes
+_sources_cache: list = []
+_sources_cache_timestamp: float = 0
+CACHE_TTL_SECONDS = 300  # 5 minutes for all caches
 
 
 async def cleanup_resources():
@@ -288,8 +290,20 @@ async def root():
 
 @app.get("/api/sources", response_model=List[SourceResponse])
 async def get_sources(db: Session = Depends(get_db)):
-    """Get all scraping sources"""
+    """Get all scraping sources (cached for 5 minutes)"""
+    global _sources_cache, _sources_cache_timestamp
+    import time
+
+    current_time = time.time()
+
+    # Return cached version if still valid
+    if _sources_cache and (current_time - _sources_cache_timestamp) < CACHE_TTL_SECONDS:
+        return _sources_cache
+
+    # Rebuild cache
     sources = db.query(Source).all()
+    _sources_cache = sources
+    _sources_cache_timestamp = current_time
     return sources
 
 
@@ -361,7 +375,7 @@ def get_tier_rates_cache(db: Session) -> dict:
     current_time = time.time()
 
     # Return cached version if still valid
-    if _tier_cache and (current_time - _tier_cache_timestamp) < TIER_CACHE_TTL_SECONDS:
+    if _tier_cache and (current_time - _tier_cache_timestamp) < CACHE_TTL_SECONDS:
         return _tier_cache
 
     # Rebuild cache
@@ -533,10 +547,10 @@ async def get_listings(
     if hair_color:
         query = query.filter(Listing.hair_color.ilike(f"%{hair_color}%"))
 
-    # Filter by tags
+    # Filter by tags (distinct to avoid duplicates when listing has multiple matching tags)
     if tags:
         tag_list = [x.strip() for x in tags.split(",")]
-        query = query.join(Listing.tags).filter(Tag.name.in_(tag_list))
+        query = query.join(Listing.tags).filter(Tag.name.in_(tag_list)).distinct()
 
     # Search by name
     if search:
@@ -607,19 +621,28 @@ async def get_tiers(
 
 @app.get("/api/stats")
 async def get_stats(db: Session = Depends(get_db)):
-    """Get statistics about the database"""
-    total_listings = db.query(Listing).count()
-    active_listings = db.query(Listing).filter(Listing.is_active == True).count()
-    expired_listings = db.query(Listing).filter(Listing.is_expired == True).count()
-    total_sources = db.query(Source).count()
-    active_sources = db.query(Source).filter(Source.active == True).count()
+    """Get statistics about the database - optimized single query"""
+    from sqlalchemy import func, case
+
+    # Single query for all listing stats
+    listing_stats = db.query(
+        func.count(Listing.id).label('total'),
+        func.sum(case((Listing.is_active == True, 1), else_=0)).label('active'),
+        func.sum(case((Listing.is_expired == True, 1), else_=0)).label('expired')
+    ).first()
+
+    # Single query for all source stats
+    source_stats = db.query(
+        func.count(Source.id).label('total'),
+        func.sum(case((Source.active == True, 1), else_=0)).label('active')
+    ).first()
 
     return {
-        "total_listings": total_listings,
-        "active_listings": active_listings,
-        "expired_listings": expired_listings,
-        "total_sources": total_sources,
-        "active_sources": active_sources
+        "total_listings": listing_stats.total or 0,
+        "active_listings": listing_stats.active or 0,
+        "expired_listings": listing_stats.expired or 0,
+        "total_sources": source_stats.total or 0,
+        "active_sources": source_stats.active or 0
     }
 
 

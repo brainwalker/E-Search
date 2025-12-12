@@ -198,6 +198,9 @@ class BaseScraper(ABC):
         # which is configured in main.py to prevent duplicates
         # Counter for batch commits
         self._pending_commits = 0
+        # Location cache: pre-loaded locations for this source (optimization)
+        self._location_cache: dict = {}  # key: (town_lower, location_lower) -> Location object
+        self._location_cache_loaded = False
     
     def _parse_sft_location_fallback(self, location_str: str) -> tuple:
         """
@@ -221,6 +224,82 @@ class BaseScraper(ABC):
         
         # No match found
         return (location_str, "unknown")
+
+    def _load_location_cache(self, source_id: int):
+        """
+        Pre-load all locations for this source into memory cache.
+        This avoids multiple DB queries per schedule during scraping.
+        """
+        if self._location_cache_loaded:
+            return
+
+        from api.database import Location
+        locations = self.db.query(Location).filter(Location.source_id == source_id).all()
+
+        for loc in locations:
+            # Cache by multiple keys for flexible matching
+            town_lower = (loc.town or '').lower().strip()
+            location_lower = (loc.location or '').lower().strip()
+
+            # Primary key: (town, location)
+            self._location_cache[(town_lower, location_lower)] = loc
+
+            # Also cache by town only for fallback matching
+            if town_lower and town_lower not in self._location_cache:
+                self._location_cache[('_town_only', town_lower)] = loc
+
+            # Mark default location
+            if loc.is_default:
+                self._location_cache[('_default', '')] = loc
+
+        self._location_cache_loaded = True
+        self.logger.debug(f"Loaded {len(locations)} locations into cache")
+
+    def _find_location_in_cache(self, town_name: str, location_detail: str, normalized_location: str = None) -> 'Location':
+        """
+        Find location in cache using multiple matching strategies.
+        Returns None if not found.
+        """
+        town_lower = (town_name or '').lower().strip()
+        location_lower = (location_detail or '').lower().strip()
+        normalized_lower = (normalized_location or '').lower().strip()
+
+        # Strategy 1: Exact match (town, location)
+        key = (town_lower, location_lower)
+        if key in self._location_cache:
+            return self._location_cache[key]
+
+        # Strategy 2: Exact match with normalized location
+        if normalized_lower and normalized_lower != location_lower:
+            key = (town_lower, normalized_lower)
+            if key in self._location_cache:
+                return self._location_cache[key]
+
+        # Strategy 3: Town + 'unknown' location
+        if town_lower:
+            key = (town_lower, 'unknown')
+            if key in self._location_cache:
+                return self._location_cache[key]
+
+        # Strategy 4: Town only match
+        if town_lower:
+            key = ('_town_only', town_lower)
+            if key in self._location_cache:
+                return self._location_cache[key]
+
+        # Strategy 5: Partial town match (check if cache has any location starting with town)
+        if town_lower:
+            for cache_key, loc in self._location_cache.items():
+                if isinstance(cache_key, tuple) and len(cache_key) == 2:
+                    cached_town = cache_key[0]
+                    if cached_town and (town_lower in cached_town or cached_town in town_lower):
+                        return loc
+
+        return None
+
+    def _get_default_location(self) -> 'Location':
+        """Get the default location from cache."""
+        return self._location_cache.get(('_default', ''))
 
     @abstractmethod
     async def scrape_schedule(self) -> List[ScheduleItem]:
