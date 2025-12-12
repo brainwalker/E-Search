@@ -660,8 +660,8 @@ class DDScraper(BaseScraper):
                 profile['schedules'] = schedules
                 self.logger.debug(f"Extracted {len(schedules)} schedule(s) from profile page for {profile_slug}")
 
-        # Use base class method for color-coded field logging
-        self.log_profile_extraction(profile_slug, profile)
+        # Note: log_profile_extraction is called in base class run() method
+        # with schedule tier and items from schedule page included
 
         return profile
     # normalize_listing uses base class implementation

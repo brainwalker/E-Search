@@ -11,6 +11,22 @@ from .base import SiteConfig, ScraperType
 
 
 # ============================================================
+# KNOWN TOWNS (Greater Toronto Area)
+# Used for location parsing and auto-creation
+# ============================================================
+KNOWN_TOWNS = {
+    'Vaughan', 'Midtown', 'Downtown', 'Etobicoke', 'Oakville',
+    'Mississauga', 'Brampton', 'North York', 'Scarborough',
+    'Markham', 'Richmond Hill', 'Ajax', 'Pickering', 'Whitby',
+    'Oshawa', 'Burlington', 'Hamilton', 'Milton', 'Newmarket',
+    'Aurora', 'King City', 'Woodbridge', 'Thornhill', 'Concord',
+}
+
+# Case-insensitive lookup set
+KNOWN_TOWNS_LOWER = {t.lower() for t in KNOWN_TOWNS}
+
+
+# ============================================================
 # SITE CONFIGURATIONS
 # ============================================================
 

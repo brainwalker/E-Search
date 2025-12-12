@@ -54,25 +54,20 @@ def parse_sft_location(location_str: str) -> Tuple[str, str]:
     """
     if not location_str:
         return ("Unknown", "unknown")
-    
+
+    from scrapers.config import KNOWN_TOWNS_LOWER
+
     location_str = location_str.strip()
-    
-    # Known SFT town names (case-insensitive matching)
-    known_towns = {
-        'vaughan', 'midtown', 'downtown', 'etobicoke', 'oakville',
-        'mississauga', 'brampton', 'north york', 'scarborough',
-        'markham', 'richmond hill', 'ajax', 'pickering', 'whitby'
-    }
-    
+
     # Try to find a known town at the start of the string
     location_lower = location_str.lower().strip()
-    
+
     # Debug: log what we're trying to match
     import logging
     logger = logging.getLogger(__name__)
     logger.debug(f"Parsing SFT location: '{location_str}' (lowercase: '{location_lower}')")
-    
-    for town in sorted(known_towns, key=len, reverse=True):  # Check longer names first
+
+    for town in sorted(KNOWN_TOWNS_LOWER, key=len, reverse=True):  # Check longer names first
         # Check if the location string starts with the town name (with optional space after)
         if location_lower.startswith(town):
             logger.debug(f"Matched town '{town}' in '{location_str}'")
@@ -348,8 +343,8 @@ class SFTScraper(BaseScraper):
         if schedules:
             profile['schedules'] = schedules
 
-        # Use base class method for color-coded field logging
-        self.log_profile_extraction(profile_slug, profile)
+        # Note: log_profile_extraction is called in base class run() method
+        # with schedule tier and items from schedule page included
 
         return profile
 

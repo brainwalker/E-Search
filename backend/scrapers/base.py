@@ -207,13 +207,13 @@ class BaseScraper(ABC):
         Fallback SFT location parser if the main one isn't available.
         Tries to extract town name from common patterns.
         """
+        from scrapers.config import KNOWN_TOWNS
+
         location_str = location_str.strip()
-        known_towns = ['Vaughan', 'Midtown', 'Downtown', 'Etobicoke', 'Oakville',
-                      'Mississauga', 'Brampton', 'North York', 'Scarborough',
-                      'Markham', 'Richmond Hill']
-        
         location_lower = location_str.lower()
-        for town in sorted(known_towns, key=len, reverse=True):
+
+        # Sort by length (longest first) to match "North York" before "York"
+        for town in sorted(KNOWN_TOWNS, key=len, reverse=True):
             if location_lower.startswith(town.lower()):
                 # Extract location part
                 town_end = len(town)
@@ -221,7 +221,7 @@ class BaseScraper(ABC):
                     town_end += 1
                 location_part = location_str[town_end:].strip()
                 return (town, location_part if location_part else "unknown")
-        
+
         # No match found
         return (location_str, "unknown")
 
@@ -324,7 +324,8 @@ class BaseScraper(ABC):
         """
         pass
 
-    def log_profile_extraction(self, profile_slug: str, profile_data: Dict, old_listing: Optional[Any] = None):
+    def log_profile_extraction(self, profile_slug: str, profile_data: Dict, old_listing: Optional[Any] = None,
+                                schedule_tier: Optional[str] = None, schedule_items: Optional[List] = None):
         """
         Log extracted profile fields with color coding.
 
@@ -332,7 +333,20 @@ class BaseScraper(ABC):
             profile_slug: Profile identifier
             profile_data: Newly extracted profile data
             old_listing: Existing listing from database (if updating)
+            schedule_tier: Tier from schedule page (may not be in profile_data)
+            schedule_items: Schedule items from schedule page (may not be in profile_data)
         """
+        # Create a combined data dict that includes schedule page data
+        combined_data = dict(profile_data)
+
+        # Add tier from schedule if not in profile data
+        if schedule_tier and not combined_data.get('tier'):
+            combined_data['tier'] = schedule_tier
+
+        # Add schedules from schedule items if not in profile data
+        if schedule_items and not combined_data.get('schedules'):
+            combined_data['schedules'] = [{'day_of_week': s.day_of_week} for s in schedule_items]
+
         # All possible fields we track
         all_fields = ['age', 'nationality', 'ethnicity', 'height', 'weight', 'bust', 'bust_type',
                       'measurements', 'hair_color', 'eye_color', 'service_type', 'tier', 'images',
@@ -344,11 +358,11 @@ class BaseScraper(ABC):
         unchanged = []
 
         for field in all_fields:
-            if field in profile_data and profile_data[field]:
+            if field in combined_data and combined_data[field]:
                 # Field was extracted
                 if old_listing:
                     old_value = getattr(old_listing, field, None)
-                    new_value = profile_data[field]
+                    new_value = combined_data[field]
 
                     # Convert for comparison
                     if field == 'images' and isinstance(old_value, str):
@@ -620,78 +634,17 @@ class BaseScraper(ABC):
                 self.logger.debug(
                     f"Normalized location_detail: '{location_detail}' -> '{normalized_location_detail}'"
                 )
-            
-            # Try multiple matching strategies
-            # Strategy 1: Match both town and location exactly (case-insensitive)
-            if town_name and location_detail:
-                location = self.db.query(Location).filter(
-                    Location.source_id == source.id,
-                    Location.town.ilike(town_name),
-                    Location.location.ilike(location_detail)
-                ).first()
-            
-            # Strategy 2: Match town exactly, normalized location exactly
-            if not location and town_name and normalized_location_detail:
-                location = self.db.query(Location).filter(
-                    Location.source_id == source.id,
-                    Location.town.ilike(town_name),
-                    Location.location.ilike(normalized_location_detail)
-                ).first()
-            
-            # Strategy 3: Match town exactly, location with wildcards (original)
-            if not location and town_name and location_detail:
-                location = self.db.query(Location).filter(
-                    Location.source_id == source.id,
-                    Location.town.ilike(town_name),
-                    Location.location.ilike(f"%{location_detail}%")
-                ).first()
-            
-            # Strategy 4: Match town exactly, normalized location with wildcards
-            if not location and town_name and normalized_location_detail:
-                location = self.db.query(Location).filter(
-                    Location.source_id == source.id,
-                    Location.town.ilike(town_name),
-                    Location.location.ilike(f"%{normalized_location_detail}%")
-                ).first()
-            
-            # Strategy 5: Match town with wildcards, location exactly
-            if not location and town_name and location_detail:
-                location = self.db.query(Location).filter(
-                    Location.source_id == source.id,
-                    Location.town.ilike(f"%{town_name}%"),
-                    Location.location.ilike(location_detail)
-                ).first()
-            
-            # Strategy 6: Match town only (exact) - if location_detail is "unknown"
-            if not location and town_name and (not location_detail or location_detail.lower() == 'unknown'):
-                location = self.db.query(Location).filter(
-                    Location.source_id == source.id,
-                    Location.town.ilike(town_name),
-                    Location.location.ilike('unknown')
-                ).first()
-            
-            # Strategy 7: Match town only (exact) - any location
-            if not location and town_name:
-                location = self.db.query(Location).filter(
-                    Location.source_id == source.id,
-                    Location.town.ilike(town_name)
-                ).first()
-            
-            # Strategy 8: Match town only (partial)
-            if not location and town_name:
-                location = self.db.query(Location).filter(
-                    Location.source_id == source.id,
-                    Location.town.ilike(f"%{town_name}%")
-                ).first()
-            
-            # Strategy 6: Auto-create location for SFT if town is known
+
+            # Use cached location lookup (much faster than 8 sequential DB queries)
+            # Cache is loaded once per scrape run
+            self._load_location_cache(source.id)
+            location = self._find_location_in_cache(town_name, location_detail, normalized_location_detail)
+
+            # Auto-create location for SFT if town is known and not in cache
             if not location and town_name and location_detail and self.config.short_name == 'SFT':
-                # Check if we should auto-create (only for known SFT towns)
-                known_sft_towns = {'Vaughan', 'Midtown', 'Downtown', 'Etobicoke', 
-                                  'Oakville', 'Mississauga', 'Brampton', 'North York',
-                                  'Scarborough', 'Markham', 'Richmond Hill'}
-                
-                if town_name in known_sft_towns:
+                from scrapers.config import KNOWN_TOWNS
+
+                if town_name in KNOWN_TOWNS:
                     self.logger.info(
                         f"Auto-creating location '{town_name}' / '{location_detail}' "
                         f"for source {source.name} (ID: {source.id})"
@@ -706,29 +659,27 @@ class BaseScraper(ABC):
                         self.db.add(new_location)
                         self.db.flush()
                         location = new_location
+                        # Add to cache for future lookups in this run
+                        town_lower = town_name.lower()
+                        loc_lower = location_detail.lower()
+                        self._location_cache[(town_lower, loc_lower)] = new_location
                         self.logger.info(f"Created new location: {town_name} / {location_detail}")
                     except Exception as e:
                         self.logger.warning(f"Failed to auto-create location '{town_name}': {e}")
                         self.db.rollback()
-            
-            # If still not found, log warning and use default location
+
+            # If still not found, use default location from cache
             if not location:
-                self.logger.warning(
-                    f"Location not found for '{location_str}' (town: '{town_name}') "
-                    f"for source {source.name} (ID: {source.id}). Using default location."
-                )
-                # Use default location
-                location = self.db.query(Location).filter(
-                    Location.source_id == source.id,
-                    Location.is_default == True
-                ).first()
-            
-            # If no default location exists, log error
-            if not location:
-                self.logger.error(
-                    f"No default location found for source {source.name} (ID: {source.id}). "
-                    f"Cannot create schedule for location '{location_str}'."
-                )
+                location = self._get_default_location()
+                if location:
+                    self.logger.debug(
+                        f"Using default location for '{location_str}' (town: '{town_name}')"
+                    )
+                else:
+                    self.logger.warning(
+                        f"Location not found for '{location_str}' (town: '{town_name}') "
+                        f"for source {source.name} (ID: {source.id}). No default location available."
+                    )
 
             location_id = location.id if location else None
             day_of_week = schedule_data.get('day_of_week')
@@ -814,9 +765,14 @@ class BaseScraper(ABC):
                     # Scrape profile
                     profile_data = await self.scrape_profile(profile_url)
 
-                    # Log extracted fields with color coding
-                    # Note: This logs before save, so we don't have old_listing yet
-                    # The scraper-specific _parse_profile methods will handle detailed field logging
+                    # Log extracted fields with schedule data included
+                    # Pass tier and schedules from schedule page so they're counted as captured
+                    self.log_profile_extraction(
+                        profile_url,
+                        profile_data,
+                        schedule_tier=first_item.tier,
+                        schedule_items=schedule_items_for_profile
+                    )
 
                     # Normalize - pass all schedule items
                     listing = self.normalize_listing(first_item, profile_data, schedule_items_for_profile)
