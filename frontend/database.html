@@ -53,10 +53,10 @@
         /* Header */
         header {
             background: var(--bg-secondary);
-            padding: 24px 32px;
+            padding: 16px 20px;
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow);
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -65,38 +65,30 @@
             border: 1px solid var(--border-color);
         }
 
+        .header-title-link {
+            text-decoration: none;
+        }
+
+        .header-title-link:hover h1 {
+            opacity: 0.8;
+        }
+
         h1 {
-            font-size: 1.75rem;
+            font-size: 1.5rem;
             font-weight: 700;
             background: var(--accent-gradient);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            margin: 0;
         }
 
         .header-actions {
             display: flex;
             gap: 12px;
             align-items: center;
-        }
-
-        .back-link {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: var(--text-primary);
-            text-decoration: none;
-            font-weight: 600;
-            padding: 10px 20px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            transition: all 0.2s ease;
-        }
-
-        .back-link:hover {
-            background: var(--accent-primary);
-            border-color: var(--accent-primary);
+            flex: 1;
+            justify-content: flex-end;
         }
 
         .refresh-btn {
@@ -339,6 +331,90 @@
             position: relative;
         }
 
+        /* Smooth transitions for all expandable elements */
+        .sidebar-wrapper,
+        .main-content-wrapper,
+        .sidebar-card,
+        .sidebar-card-body,
+        .logs-container {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Logs expanded state */
+        body.logs-expanded .main-content-wrapper {
+            opacity: 0;
+            transform: translateX(50px);
+            pointer-events: none;
+            position: absolute;
+            visibility: hidden;
+        }
+
+        body.logs-expanded .sidebar-wrapper {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        body.logs-expanded .left-sidebar {
+            max-height: calc(100vh - 140px);
+            overflow: visible;
+        }
+
+        body.logs-expanded #logsCard {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 180px);
+        }
+
+        body.logs-expanded #logsCard .sidebar-card-header {
+            display: none;
+        }
+
+        body.logs-expanded #logsCard .sidebar-card-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-radius: var(--radius) var(--radius) 0 0;
+        }
+
+        body.logs-expanded #logsCard .logs-container {
+            flex: 1;
+            max-height: none !important;
+            min-height: 300px;
+            height: 100% !important;
+            overflow-y: scroll !important;
+            overflow-x: hidden;
+        }
+
+        body.logs-expanded .sidebar-card:not(#logsCard) {
+            opacity: 0;
+            transform: scale(0.95);
+            height: 0;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+        }
+
+        body.logs-expanded .sidebar-toggle {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Card collapse animation */
+        .sidebar-card.collapsed .sidebar-card-body {
+            max-height: 0;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            overflow: hidden;
+        }
+
+        .sidebar-card:not(.collapsed) .sidebar-card-body {
+            max-height: 2000px;
+            opacity: 1;
+        }
+
         /* Sidebar Toggle */
         .sidebar-toggle {
             position: fixed;
@@ -541,19 +617,70 @@
 
         .table-info {
             margin-bottom: 20px;
-            padding: 14px 18px;
+            padding: 12px 18px;
             background: var(--bg-tertiary);
             border-radius: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            flex-wrap: wrap;
             gap: 12px;
             font-size: 0.95rem;
         }
 
+        .table-info-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex: 0 0 auto;
+        }
+
+        .table-info-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+        }
+
         .table-info strong {
             color: var(--accent-primary);
+        }
+
+        .table-info-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex: 0 0 auto;
+        }
+
+        .table-search {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .table-search input {
+            padding: 8px 14px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            width: 220px;
+            transition: all 0.2s ease;
+        }
+
+        .table-search input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+
+        .table-search input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .table-info .pagination {
+            margin-top: 0;
         }
 
         /* Data Table */
@@ -625,6 +752,137 @@
         .page-btn:disabled {
             opacity: 0.4;
             cursor: not-allowed;
+        }
+
+        /* Schedules Section */
+        .schedules-section {
+            margin-top: 20px;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+            animation: slideUp 0.3s ease;
+            width: 100%;
+        }
+
+        .schedules-section.hidden {
+            display: none;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .schedules-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .schedules-header h3 {
+            margin: 0;
+            font-size: 1rem;
+            color: var(--text-primary);
+        }
+
+        .schedules-close {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .schedules-close:hover {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border-color: var(--accent-primary);
+        }
+
+        .schedules-content {
+            width: 100%;
+        }
+
+        .schedule-items-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .schedule-item-card {
+            flex: 1;
+            min-width: 140px;
+            max-width: 200px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius);
+            padding: 16px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+
+        .schedule-item-card:hover {
+            border-color: var(--accent-primary);
+            transform: translateY(-2px);
+        }
+
+        .schedule-item-day {
+            font-weight: 700;
+            color: var(--accent-primary);
+            font-size: 0.95rem;
+            margin-bottom: 8px;
+        }
+
+        .schedule-item-time {
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            margin-bottom: 6px;
+        }
+
+        .schedule-item-town {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .schedule-loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+        }
+
+        .no-schedule, .schedule-error {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        .schedule-error {
+            color: #f87171;
+        }
+
+        /* Clickable rows */
+        .clickable-row {
+            cursor: pointer;
+        }
+
+        .clickable-row:hover {
+            background: rgba(99, 102, 241, 0.05) !important;
+        }
+
+        .clickable-row.schedule-selected {
+            background: rgba(99, 102, 241, 0.1) !important;
+            border-left: 3px solid var(--accent-primary);
         }
 
         /* Forms & Inputs */
@@ -725,6 +983,13 @@
 
         .log-line:hover {
             background: rgba(255, 255, 255, 0.03);
+        }
+
+        .log-time {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            margin-right: 8px;
+            opacity: 0.7;
         }
 
         .log-line.error {
@@ -1047,52 +1312,44 @@
             font-weight: 600;
         }
 
-        /* Merged stats and tables section */
-        .dashboard-header {
-            background: var(--bg-secondary);
-            padding: 20px;
-            border-radius: var(--radius-lg);
-            margin-bottom: 20px;
-            border: 1px solid var(--border-color);
-        }
-
         .table-tabs {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
             align-items: center;
         }
 
         .table-tab {
-            padding: 12px 18px;
+            padding: 8px 14px;
             background: var(--bg-tertiary);
             border: 1px solid var(--border-color);
-            border-radius: 10px;
+            border-radius: 8px;
             color: var(--text-secondary);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             display: inline-flex;
-            flex-direction: column;
             align-items: center;
-            gap: 4px;
-            min-width: 90px;
+            gap: 8px;
+            transform: scale(1);
         }
 
         .table-tab:hover {
             border-color: var(--accent-primary);
             color: var(--text-primary);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            transform: scale(1.02);
+        }
+
+        .table-tab:active {
+            transform: scale(0.98);
         }
 
         .table-tab.active {
             background: var(--accent-gradient);
             border-color: transparent;
             color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
         }
 
         .table-tab .tab-name {
@@ -1106,11 +1363,11 @@
         }
 
         .tab-count {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 700;
-            padding: 3px 10px;
+            padding: 2px 8px;
             background: var(--bg-secondary);
-            border-radius: 12px;
+            border-radius: 10px;
             color: var(--accent-primary);
         }
 
@@ -1150,10 +1407,25 @@
             background: var(--bg-tertiary);
             cursor: pointer;
             user-select: none;
+            transition: all 0.2s ease;
         }
 
         .sidebar-card-header:hover {
             background: var(--bg-card);
+        }
+
+        .sidebar-card-header .collapse-icon {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 0.7rem;
+            opacity: 0.7;
+        }
+
+        .sidebar-card:not(.collapsed) .sidebar-card-header .collapse-icon {
+            transform: rotate(0deg);
+        }
+
+        .sidebar-card.collapsed .sidebar-card-header .collapse-icon {
+            transform: rotate(-90deg);
         }
 
         .sidebar-card-title {
@@ -1167,10 +1439,7 @@
 
         .sidebar-card-body {
             padding: 16px;
-        }
-
-        .sidebar-card.collapsed .sidebar-card-body {
-            display: none;
+            overflow: hidden;
         }
 
         .scrape-grid {
@@ -1264,13 +1533,14 @@
 <body>
     <div class="container">
         <header>
-            <h1>📊 Database Viewer</h1>
+            <a href="index.html" class="header-title-link">
+                <h1>📊 Database Viewer</h1>
+            </a>
             <div class="header-actions">
-                <button class="refresh-btn" id="refreshBtn" onclick="refreshDatabase()" title="Refresh database">
-                    <span class="refresh-icon" id="refreshIcon">🔄</span>
-                    Refresh
-                </button>
-                <a href="index.html" class="back-link">← Back to Listings</a>
+                <div class="table-tabs" id="tableList">
+                    <div class="loading">Loading...</div>
+                </div>
+                <span class="db-size-indicator" id="dbSizeIndicator">...</span>
             </div>
         </header>
 
@@ -1324,7 +1594,7 @@
                     <div class="sidebar-card collapsed" id="sourceCard">
                         <div class="sidebar-card-header" onclick="toggleCard('sourceCard')">
                             <span class="sidebar-card-title">🗑️ Delete Data</span>
-                            <span class="collapse-icon">▶</span>
+                            <span class="collapse-icon">▼</span>
                         </div>
                         <div class="sidebar-card-body">
                             <div id="sourcesList" style="display: flex; flex-direction: column; gap: 8px;">
@@ -1337,7 +1607,7 @@
                     <div class="sidebar-card collapsed" id="queryCard">
                         <div class="sidebar-card-header" onclick="toggleCard('queryCard')">
                             <span class="sidebar-card-title">🔍 SQL Query</span>
-                            <span class="collapse-icon">▶</span>
+                            <span class="collapse-icon">▼</span>
                         </div>
                         <div class="sidebar-card-body">
                             <textarea id="sqlQuery" placeholder="SELECT * FROM listings LIMIT 10" style="min-height: 80px;">SELECT * FROM listings LIMIT 10</textarea>
@@ -1346,7 +1616,7 @@
                     </div>
 
                     <!-- Backend Logs -->
-                    <div class="sidebar-card" id="logsCard">
+                    <div class="sidebar-card collapsed" id="logsCard">
                         <div class="sidebar-card-header" onclick="toggleCard('logsCard')">
                             <span class="sidebar-card-title">📋 Logs</span>
                             <span class="collapse-icon">▼</span>
@@ -1356,7 +1626,6 @@
                                 <button class="btn-primary btn-small" id="pauseLogsBtn" onclick="event.stopPropagation(); toggleLogsPause()">
                                     <span id="pauseIcon">⏸️</span> <span id="pauseText">Pause</span>
                                 </button>
-                                <button class="btn-small" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-secondary);" onclick="event.stopPropagation(); clearLogs()" title="Clear logs">🗑️</button>
                                 <button class="btn-success btn-small" onclick="event.stopPropagation(); restartBackend()" title="Restart backend">🔄</button>
                             </div>
                             <div class="logs-filters" onclick="event.stopPropagation();">
@@ -1382,13 +1651,6 @@
 
             <!-- Main Content Area -->
             <div class="main-content-wrapper">
-                <!-- Dashboard Header - Tables with Stats -->
-                <div class="dashboard-header">
-                    <div class="table-tabs" id="tableList">
-                        <div class="loading">Loading...</div>
-                    </div>
-                </div>
-
                 <!-- Bulk Actions Bar -->
                 <div class="bulk-actions" id="bulkActions">
                     <span><span class="count" id="selectedCount">0</span> selected</span>
@@ -1464,6 +1726,10 @@
         // Sorting state
         let sortColumn = null;
         let sortDirection = 'asc';
+
+        // Search state
+        let nameSearchQuery = '';
+        let searchDebounceTimer = null;
 
         // Selection state
         let selectedRows = new Set();
@@ -1910,13 +2176,6 @@
                 const container = document.getElementById('tableList');
                 container.innerHTML = '';
 
-                // Add DB size indicator first
-                const dbSizeSpan = document.createElement('span');
-                dbSizeSpan.className = 'db-size-indicator';
-                dbSizeSpan.id = 'dbSizeIndicator';
-                dbSizeSpan.textContent = tableStats._database_size_mb ? `${tableStats._database_size_mb} MB` : '...';
-                container.appendChild(dbSizeSpan);
-
                 // Table icon mapping
                 const tableIcons = {
                     listings: '📋',
@@ -1938,6 +2197,14 @@
                         clearSelection();
                         sortColumn = null;
                         sortDirection = 'asc';
+                        // Exit logs expanded mode if active
+                        if (document.body.classList.contains('logs-expanded')) {
+                            document.body.classList.remove('logs-expanded');
+                            const logsCard = document.getElementById('logsCard');
+                            if (logsCard) {
+                                logsCard.classList.add('collapsed');
+                            }
+                        }
                         loadTable(table.name);
                         // Collapse sidebar when table is clicked
                         collapseSidebar();
@@ -1953,8 +2220,25 @@
             }
         }
 
+        // Handle name search input
+        function handleNameSearch(event) {
+            const query = event.target.value;
+            nameSearchQuery = query;
+
+            // Debounce the search
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+                loadTable(currentTable, 1); // Reset to page 1 on new search
+            }, 300);
+        }
+
         // Load table data
         async function loadTable(tableName, page = 1) {
+            // Reset search when switching tables
+            if (currentTable !== tableName) {
+                nameSearchQuery = '';
+            }
+
             currentTable = tableName;
             currentPage = page;
 
@@ -1967,7 +2251,14 @@
             container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Loading data...</p></div>';
 
             try {
-                const response = await fetch(`${API_BASE}/db/table/${tableName}?page=${page}`);
+                let url = `${API_BASE}/db/table/${tableName}?page=${page}`;
+
+                // Add search parameter for listings table
+                if (tableName === 'listings' && nameSearchQuery) {
+                    url += `&search=${encodeURIComponent(nameSearchQuery)}`;
+                }
+
+                const response = await fetch(url);
                 const data = await response.json();
 
                 if (data.error) {
@@ -1981,10 +2272,18 @@
             }
         }
 
+        // Store current table data for schedule display
+        let currentTableData = null;
+        let selectedListingId = null;
+
         // Display table data with sortable columns, icon buttons, multi-select
         function displayTableData(data) {
             const container = document.getElementById('dataContainer');
             const hasActions = ['listings', 'locations', 'tiers'].includes(data.table);
+            const hasSchedules = data.schedules && Object.keys(data.schedules).length > 0;
+
+            // Store data for schedule section
+            currentTableData = data;
 
             // Reorder columns for listings table
             if (data.table === 'listings') {
@@ -2028,10 +2327,33 @@
                 });
             }
 
+            // Build search HTML for listings table
+            const searchHtml = data.table === 'listings' ? `
+                <div class="table-search">
+                    <input type="text" id="nameSearchInput" placeholder="Search by name..." value="${nameSearchQuery}" onkeyup="handleNameSearch(event)">
+                </div>
+            ` : '';
+
+            // Build pagination HTML
+            const paginationHtml = data.total_pages > 1 ? `
+                <div class="pagination">
+                    <button class="page-btn" onclick="loadTable('${data.table}', ${data.page - 1})" ${data.page === 1 ? 'disabled' : ''}>←</button>
+                    <span style="color: var(--text-secondary);">${data.page}/${data.total_pages}</span>
+                    <button class="page-btn" onclick="loadTable('${data.table}', ${data.page + 1})" ${data.page === data.total_pages ? 'disabled' : ''}>→</button>
+                </div>
+            ` : '';
+
             let html = `
                 <div class="table-info">
-                    <div><strong>${data.table}</strong> - ${data.total_count} rows</div>
-                    <div>Page ${data.page}/${data.total_pages}</div>
+                    <div class="table-info-left">
+                        <div><strong>${data.table}</strong> - ${data.total_count} rows</div>
+                    </div>
+                    <div class="table-info-center">
+                        ${searchHtml}
+                    </div>
+                    <div class="table-info-right">
+                        ${paginationHtml}
+                    </div>
                 </div>
             `;
 
@@ -2062,7 +2384,10 @@
                 sortedData.forEach(row => {
                     const rowId = row['id'];
                     const isSelected = selectedRows.has(rowId);
-                    html += `<tr data-row-id="${rowId}" class="${isSelected ? 'selected' : ''}">`;
+                    const rowName = row['name'] || '';
+                    const clickHandler = (data.table === 'listings') ? `onclick="showScheduleForRow(${rowId}, '${escapeHtml(rowName).replace(/'/g, "\\'")}', event)"` : '';
+                    const clickableClass = (data.table === 'listings') ? 'clickable-row' : '';
+                    html += `<tr data-row-id="${rowId}" class="${isSelected ? 'selected' : ''} ${clickableClass}" ${clickHandler}>`;
 
                     // Checkbox
                     if (data.table === 'listings') {
@@ -2130,19 +2455,84 @@
 
                 html += '</tbody></table></div>';
 
-                if (data.total_pages > 1) {
-                    html += `
-                        <div class="pagination">
-                            <button class="page-btn" onclick="loadTable('${data.table}', ${data.page - 1})" ${data.page === 1 ? 'disabled' : ''}>←</button>
-                            <span style="color: var(--text-secondary);">${data.page}/${data.total_pages}</span>
-                            <button class="page-btn" onclick="loadTable('${data.table}', ${data.page + 1})" ${data.page === data.total_pages ? 'disabled' : ''}>→</button>
+                // Add schedules section placeholder for listings table (hidden by default)
+                if (data.table === 'listings') {
+                    html += `<div class="schedules-section hidden" id="schedulesSection">
+                        <div class="schedules-header">
+                            <h3>📅 Schedule</h3>
+                            <button class="schedules-close" onclick="hideScheduleSection()">✕</button>
                         </div>
-                    `;
+                        <div class="schedules-content" id="schedulesContent">
+                        </div>
+                    </div>`;
                 }
             }
 
             container.innerHTML = html;
             updateBulkActionsBar();
+        }
+
+        // Show schedule for a specific row when clicked
+        async function showScheduleForRow(rowId, rowName, event) {
+            // Don't trigger if clicking on buttons, checkboxes, or links
+            if (event && (event.target.closest('button') || event.target.closest('input') || event.target.closest('a'))) {
+                return;
+            }
+
+            const section = document.getElementById('schedulesSection');
+            const content = document.getElementById('schedulesContent');
+
+            if (!section || !content) return;
+
+            // Highlight selected row
+            document.querySelectorAll('tr.clickable-row').forEach(tr => {
+                tr.classList.remove('schedule-selected');
+            });
+            document.querySelector(`tr[data-row-id="${rowId}"]`)?.classList.add('schedule-selected');
+
+            // Update header with name
+            section.querySelector('h3').innerHTML = `📅 Schedule for <span style="color: var(--accent-primary)">${escapeHtml(rowName)}</span>`;
+
+            // Show loading state
+            content.innerHTML = '<div class="schedule-loading">Loading schedule...</div>';
+            section.classList.remove('hidden');
+
+            try {
+                // Fetch schedule from API
+                const response = await fetch(`${API_BASE}/db/listing/${rowId}/schedules`);
+                const data = await response.json();
+
+                if (data.schedules && data.schedules.length > 0) {
+                    content.innerHTML = `<div class="schedule-items-row">
+                        ${data.schedules.map(s => `
+                            <div class="schedule-item-card">
+                                <div class="schedule-item-day">${s.day}</div>
+                                <div class="schedule-item-time">${s.start || '?'} - ${s.end || '?'}</div>
+                                ${s.town ? `<div class="schedule-item-town">📍 ${s.town}</div>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>`;
+                } else {
+                    content.innerHTML = '<p class="no-schedule">No schedule available for this listing</p>';
+                }
+            } catch (error) {
+                content.innerHTML = '<p class="schedule-error">Failed to load schedule</p>';
+            }
+
+            // Scroll to schedules section
+            section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Hide schedule section
+        function hideScheduleSection() {
+            const section = document.getElementById('schedulesSection');
+            if (section) {
+                section.classList.add('hidden');
+            }
+            // Remove row highlight
+            document.querySelectorAll('tr.clickable-row').forEach(tr => {
+                tr.classList.remove('schedule-selected');
+            });
         }
 
         // Sorting
@@ -2409,13 +2799,35 @@
             }
         }
 
+        function formatTimestamp(dateStr, timeStr) {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const [year, month, day] = dateStr.split('-');
+            const [hours, minutes] = timeStr.split(':');
+            const hour = parseInt(hours);
+            const ampm = hour >= 12 ? 'pm' : 'am';
+            const hour12 = hour % 12 || 12;
+            return `${months[parseInt(month) - 1]} ${parseInt(day)}, ${hour12}:${minutes}${ampm}`;
+        }
+
         function formatLogLine(line) {
             let className = '';
             let formattedLine = line;
+            let timePrefix = '';
+            let logLevel = '';
+
+            // Convert timestamp pattern like "2025-12-12 01:49:46,422 - scraper.DD - INFO - " to readable format
+            const timestampPattern = /^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}):\d{2},\d{3}\s+-\s+[\w.]+\s+-\s+(INFO|DEBUG|WARNING|ERROR|CRITICAL)\s+-\s*/;
+            const tsMatch = line.match(timestampPattern);
+            if (tsMatch) {
+                const readableTime = formatTimestamp(tsMatch[1], tsMatch[2]);
+                logLevel = tsMatch[3];
+                timePrefix = `<span class="log-time">${readableTime}</span> `;
+                formattedLine = line.replace(timestampPattern, '');
+            }
 
             // Check for HTTP request pattern (e.g., "INFO:     127.0.0.1:49966 - "GET /db/table/listings HTTP/1.1" 200 OK")
             const httpPattern = /^INFO:\s+[\d.:]+\s+-\s+"(GET|POST|PUT|DELETE|PATCH)\s+([^"]+)\s+HTTP\/[\d.]+"\s+(\d+)\s+(\w+)$/;
-            const httpMatch = line.match(httpPattern);
+            const httpMatch = formattedLine.match(httpPattern);
 
             if (httpMatch) {
                 const method = httpMatch[1];
@@ -2426,19 +2838,19 @@
                 className = 'http-request';
                 const statusClass = statusCode >= 400 ? 'http-status-error' : 'http-status-ok';
                 formattedLine = `<span class="http-method">${method}</span> ${escapeHtml(path)} <span class="${statusClass}">${statusCode} ${statusText}</span>`;
-                return `<div class="log-line ${className}">${formattedLine}</div>`;
+                return `<div class="log-line ${className}">${timePrefix}${formattedLine}</div>`;
             }
 
-            // Regular log classification
-            if (line.includes('ERROR') || line.includes('CRITICAL') || line.includes('errors)')) className = 'error';
-            else if (line.includes('WARNING') || line.includes('WARN')) className = 'warning';
-            else if (line.includes('INFO')) className = 'info';
-            else if (line.includes('DEBUG')) className = 'debug';
+            // Classify based on extracted log level or content
+            if (logLevel === 'ERROR' || logLevel === 'CRITICAL' || line.includes('errors)')) className = 'error';
+            else if (logLevel === 'WARNING' || line.includes('WARN')) className = 'warning';
+            else if (logLevel === 'INFO') className = 'info';
+            else if (logLevel === 'DEBUG') className = 'debug';
             else if (line.includes('Progress:') || line.includes('❯❯❯') || line.includes('✅')) className = 'info';
 
             const div = document.createElement('div');
-            div.textContent = line;
-            return `<div class="log-line ${className}">${div.innerHTML}</div>`;
+            div.textContent = formattedLine;
+            return `<div class="log-line ${className}">${timePrefix}${div.innerHTML}</div>`;
         }
 
         function clearLogs() {
@@ -2534,19 +2946,37 @@
                 });
 
                 const data = await response.json();
-                
+
                 if (response.ok) {
-                    alert(`✅ ${data.message}`);
-                    setTimeout(() => {
+                    // Backend will restart, show reconnecting state
+                    setBackendStatus(false);
+                    document.getElementById('logsContainer').innerHTML =
+                        '<div style="color: var(--accent-primary); text-align: center; padding: 20px;">🔄 Backend restarting...</div>';
+
+                    // Wait and then try to reconnect
+                    setTimeout(async () => {
                         lastLogTimestamp = null;
                         logsCleared = false;
-                        loadLogs();
-                    }, 1000);
+                        await refreshDatabase();
+                    }, 2000);
                 } else {
                     alert(`❌ ${data.detail || 'Failed to restart'}`);
                 }
             } catch (error) {
-                alert(`❌ Error: ${error.message}`);
+                // Connection lost is expected during restart
+                if (error.message.includes('Failed to fetch')) {
+                    setBackendStatus(false);
+                    document.getElementById('logsContainer').innerHTML =
+                        '<div style="color: var(--accent-primary); text-align: center; padding: 20px;">🔄 Backend restarting...</div>';
+
+                    setTimeout(async () => {
+                        lastLogTimestamp = null;
+                        logsCleared = false;
+                        await refreshDatabase();
+                    }, 2000);
+                } else {
+                    alert(`❌ Error: ${error.message}`);
+                }
             }
         }
 
@@ -2623,24 +3053,22 @@
                 allCards.forEach(otherCard => {
                     if (otherCard.id !== cardId && !otherCard.classList.contains('collapsed')) {
                         otherCard.classList.add('collapsed');
-                        const otherIcon = otherCard.querySelector('.collapse-icon');
-                        if (otherIcon) otherIcon.textContent = '▶';
                     }
                 });
             }
 
-            const icon = card.querySelector('.collapse-icon');
             card.classList.toggle('collapsed');
 
-            if (icon) {
-                icon.textContent = card.classList.contains('collapsed') ? '▶' : '▼';
-            }
-
-            // Expand sidebar width to 700 when Backend Logs is expanded
-            if (cardId === 'logsCard' && wrapper) {
+            // Special handling for logs card - expand to full width
+            if (cardId === 'logsCard') {
                 if (!card.classList.contains('collapsed')) {
-                    wrapper.style.width = `${SIDEBAR_LOGS_WIDTH}px`;
+                    // Expand logs to full width, hide table view
+                    document.body.classList.add('logs-expanded');
+                    wrapper.classList.remove('collapsed');
+                    wrapper.style.width = '100%';
                 } else {
+                    // Collapse logs, restore normal view
+                    document.body.classList.remove('logs-expanded');
                     wrapper.style.width = `${SIDEBAR_DEFAULT}px`;
                 }
             }

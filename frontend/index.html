@@ -1050,24 +1050,24 @@
             font-weight: 600;
         }
 
-        .schedule-section {
-            margin-top: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
         .schedule-title {
             font-weight: 600;
             color: var(--accent-primary);
             font-size: 0.7rem;
-            margin-bottom: 0;
+            margin-top: 12px;
+            margin-bottom: 4px;
             display: inline-flex;
             align-items: center;
             gap: 4px;
             opacity: 0.85;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+        }
+
+        .schedule-section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .schedule-item {
@@ -1103,7 +1103,8 @@
             border-color: #4ade80;
         }
 
-        .schedule-item.today .schedule-title {
+        .schedule-item.today .schedule-title,
+        .schedule-title.today {
             color: #4ade80;
         }
 
@@ -1119,7 +1120,8 @@
             border-color: var(--accent-primary);
         }
 
-        .schedule-item.future .schedule-title {
+        .schedule-item.future .schedule-title,
+        .schedule-title.future {
             color: var(--accent-primary);
         }
 
@@ -2947,15 +2949,17 @@
                 const dayLabel = isToday ? `Today (${dateStr})` : `${dayOfWeek} (${dateStr})`;
                 const itemClass = isToday ? 'today' : 'future';
 
-                return `
-                    <div class="schedule-item ${itemClass}">
-                        <div class="schedule-title">📅 ${dayLabel}</div>
-                        <div class="schedule-location-row">
-                            <span class="schedule-times">${timeRange}</span>
-                            <span class="schedule-location">📍 ${town || 'Available'}</span>
+                return {
+                    title: `<div class="schedule-title ${itemClass}">📅 ${dayLabel}</div>`,
+                    content: `
+                        <div class="schedule-item ${itemClass}">
+                            <div class="schedule-location-row">
+                                <span class="schedule-times">${timeRange}</span>
+                                <span class="schedule-location">📍 ${town || 'Available'}</span>
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `
+                };
             };
 
             // Show schedules: if days are selected, show those days' schedules; otherwise show today's or next
@@ -2976,16 +2980,18 @@
 
                 if (filteredSchedules.length > 0) {
                     // Show all matching schedules
-                    schedulesHtml = `
+                    const scheduleItems = filteredSchedules.map(schedule => {
+                        const town = schedule.location?.town || '';
+                        const date = getDateForDay(schedule.day_of_week);
+                        const dateStr = formatShortDate(date);
+                        return createScheduleItem(schedule.day_of_week, schedule.start_time, schedule.end_time, town, dateStr);
+                    });
+                    schedulesHtml = scheduleItems.map(item => `
+                        ${item.title}
                         <div class="schedule-section">
-                            ${filteredSchedules.map(schedule => {
-                                const town = schedule.location?.town || '';
-                                const date = getDateForDay(schedule.day_of_week);
-                                const dateStr = formatShortDate(date);
-                                return createScheduleItem(schedule.day_of_week, schedule.start_time, schedule.end_time, town, dateStr);
-                            }).join('')}
+                            ${item.content}
                         </div>
-                    `;
+                    `).join('');
                 } else {
                     // No valid schedules for selected days, show next available schedule
                     const nextSchedule = getNextSchedule(listing);
@@ -2993,19 +2999,17 @@
                         const town = nextSchedule.location?.town || '';
                         const nextDate = getDateForDay(nextSchedule.day_of_week);
                         const nextDateStr = formatShortDate(nextDate);
+                        const item = createScheduleItem(nextSchedule.day_of_week, nextSchedule.start_time, nextSchedule.end_time, town, nextDateStr);
 
                         schedulesHtml = `
+                            ${item.title}
                             <div class="schedule-section">
-                                ${createScheduleItem(nextSchedule.day_of_week, nextSchedule.start_time, nextSchedule.end_time, town, nextDateStr)}
+                                ${item.content}
                             </div>
                         `;
                     } else {
                         schedulesHtml = `
-                            <div class="schedule-section">
-                                <div class="schedule-item" style="color: var(--text-muted); font-style: italic;">
-                                    <div class="schedule-title">No schedule available</div>
-                                </div>
-                            </div>
+                            <div class="schedule-title" style="color: var(--text-muted); font-style: italic;">No schedule available</div>
                         `;
                     }
                 }
@@ -3014,10 +3018,12 @@
                 const town = todaySchedule.location?.town || '';
                 const todayDate = getDateForDay(todayName);
                 const todayDateStr = formatShortDate(todayDate);
+                const item = createScheduleItem(todayName, todaySchedule.start_time, todaySchedule.end_time, town, todayDateStr);
 
                 schedulesHtml = `
+                    ${item.title}
                     <div class="schedule-section">
-                        ${createScheduleItem(todayName, todaySchedule.start_time, todaySchedule.end_time, town, todayDateStr)}
+                        ${item.content}
                     </div>
                 `;
             } else {
@@ -3027,20 +3033,18 @@
                     const town = nextSchedule.location?.town || '';
                     const nextDate = getDateForDay(nextSchedule.day_of_week);
                     const nextDateStr = formatShortDate(nextDate);
+                    const item = createScheduleItem(nextSchedule.day_of_week, nextSchedule.start_time, nextSchedule.end_time, town, nextDateStr);
 
                     schedulesHtml = `
+                        ${item.title}
                         <div class="schedule-section">
-                            ${createScheduleItem(nextSchedule.day_of_week, nextSchedule.start_time, nextSchedule.end_time, town, nextDateStr)}
+                            ${item.content}
                         </div>
                     `;
                 } else {
                     // No schedules available at all
                     schedulesHtml = `
-                        <div class="schedule-section">
-                            <div class="schedule-item" style="color: var(--text-muted); font-style: italic;">
-                                <div class="schedule-title">No schedule available</div>
-                            </div>
-                        </div>
+                        <div class="schedule-title" style="color: var(--text-muted); font-style: italic;">No schedule available</div>
                     `;
                 }
             }

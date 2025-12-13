@@ -71,6 +71,7 @@ async def get_table_data(
     table_name: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
+    search: str = Query(None, description="Search by name (listings table only)"),
     db: Session = Depends(get_db)
 ):
     """Get data from a specific table with pagination"""
@@ -78,25 +79,34 @@ async def get_table_data(
     # Validate table name against whitelist to prevent SQL injection
     table_name = validate_table_name(table_name)
 
+    # Build WHERE clause for search (listings table only)
+    where_clause = ""
+    params = {"limit": page_size}
+
+    if table_name == 'listings' and search:
+        where_clause = "WHERE name LIKE :search"
+        params["search"] = f"%{search}%"
+
     # Get total count - table_name is now validated/safe
-    count_query = text(f"SELECT COUNT(*) FROM {table_name}")
-    total_count = db.execute(count_query).scalar()
+    count_query = text(f"SELECT COUNT(*) FROM {table_name} {where_clause}")
+    total_count = db.execute(count_query, params).scalar()
 
     # Get paginated data
     offset = (page - 1) * page_size
-    
+    params["offset"] = offset
+
     # Custom column order for listings table to show important fields first
     if table_name == 'listings':
-        columns_order = """id, name, tier, age, nationality, ethnicity, 
-                          bust, measurements, height, weight, 
+        columns_order = """id, name, tier, age, nationality, ethnicity,
+                          bust, measurements, height, weight,
                           eye_color, hair_color, service_type, bust_type,
-                          profile_url, source_id, images, 
+                          profile_url, source_id, images,
                           is_active, is_expired, created_at, updated_at"""
-        data_query = text(f"SELECT {columns_order} FROM {table_name} LIMIT :limit OFFSET :offset")
+        data_query = text(f"SELECT {columns_order} FROM {table_name} {where_clause} LIMIT :limit OFFSET :offset")
     else:
-        data_query = text(f"SELECT * FROM {table_name} LIMIT :limit OFFSET :offset")
-    
-    result = db.execute(data_query, {"limit": page_size, "offset": offset})
+        data_query = text(f"SELECT * FROM {table_name} {where_clause} LIMIT :limit OFFSET :offset")
+
+    result = db.execute(data_query, params)
 
     # Convert to list of dicts
     columns = result.keys()
@@ -111,6 +121,40 @@ async def get_table_data(
             row_dict[col] = value
         rows.append(row_dict)
 
+    # If searching listings by name, also fetch schedules for the matched listings
+    schedules_by_listing = {}
+    if table_name == 'listings' and search and rows:
+        listing_ids = [row['id'] for row in rows if row.get('id')]
+        if listing_ids:
+            placeholders = ', '.join([f':id_{i}' for i in range(len(listing_ids))])
+            schedule_query = text(f"""
+                SELECT s.listing_id, s.day_of_week, s.start_time, s.end_time, l.town
+                FROM schedules s
+                LEFT JOIN locations l ON s.location_id = l.id
+                WHERE s.listing_id IN ({placeholders})
+                ORDER BY s.listing_id, CASE s.day_of_week
+                    WHEN 'Monday' THEN 1
+                    WHEN 'Tuesday' THEN 2
+                    WHEN 'Wednesday' THEN 3
+                    WHEN 'Thursday' THEN 4
+                    WHEN 'Friday' THEN 5
+                    WHEN 'Saturday' THEN 6
+                    WHEN 'Sunday' THEN 7
+                END
+            """)
+            schedule_params = {f'id_{i}': lid for i, lid in enumerate(listing_ids)}
+            schedule_result = db.execute(schedule_query, schedule_params)
+            for srow in schedule_result:
+                lid = srow[0]
+                if lid not in schedules_by_listing:
+                    schedules_by_listing[lid] = []
+                schedules_by_listing[lid].append({
+                    'day': srow[1],
+                    'start': srow[2],
+                    'end': srow[3],
+                    'town': srow[4]
+                })
+
     return {
         "table": table_name,
         "total_count": total_count,
@@ -118,8 +162,42 @@ async def get_table_data(
         "page_size": page_size,
         "total_pages": (total_count + page_size - 1) // page_size,
         "columns": list(columns),
-        "data": rows
+        "data": rows,
+        "schedules": schedules_by_listing if schedules_by_listing else None
     }
+
+
+@router.get("/listing/{listing_id}/schedules")
+async def get_listing_schedules(
+    listing_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get schedules for a specific listing"""
+    schedule_query = text("""
+        SELECT s.day_of_week, s.start_time, s.end_time, l.town
+        FROM schedules s
+        LEFT JOIN locations l ON s.location_id = l.id
+        WHERE s.listing_id = :listing_id
+        ORDER BY CASE s.day_of_week
+            WHEN 'Monday' THEN 1
+            WHEN 'Tuesday' THEN 2
+            WHEN 'Wednesday' THEN 3
+            WHEN 'Thursday' THEN 4
+            WHEN 'Friday' THEN 5
+            WHEN 'Saturday' THEN 6
+            WHEN 'Sunday' THEN 7
+        END
+    """)
+    result = db.execute(schedule_query, {"listing_id": listing_id})
+    schedules = []
+    for row in result:
+        schedules.append({
+            'day': row[0],
+            'start': row[1],
+            'end': row[2],
+            'town': row[3]
+        })
+    return {"listing_id": listing_id, "schedules": schedules}
 
 
 @router.get("/query")
