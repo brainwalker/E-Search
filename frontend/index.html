@@ -2170,7 +2170,9 @@
         // Initialize theme immediately
         initTheme();
 
-        const API_BASE = 'http://localhost:8000';
+        const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:8000'
+            : `${window.location.protocol}//${window.location.hostname}:8000`;
         let allSources = [];
         let hideExpired = false;
         let showImages = false; // Images hidden by default
@@ -2179,6 +2181,13 @@
         let listingsAbortController = null;
         const requestCache = new Map();
         const CACHE_TTL = 30000; // 30 seconds
+
+        // Browser-compatible timeout signal (AbortSignal.timeout not supported in all browsers)
+        function createTimeoutSignal(ms) {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), ms);
+            return controller.signal;
+        }
 
         // Lazy loading observer
         let imageObserver = null;
@@ -2344,7 +2353,7 @@
 
         async function checkBackendStatus() {
             try {
-                const response = await fetch(`${API_BASE}/`, { signal: AbortSignal.timeout(2000) });
+                const response = await fetch(`${API_BASE}/`, { signal: createTimeoutSignal(2000) });
                 return response.ok;
             } catch (error) {
                 return false;
@@ -2433,6 +2442,7 @@
         async function loadStats() {
             try {
                 const response = await fetch(`${API_BASE}/api/stats`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const stats = await response.json();
                 document.getElementById('totalListings').textContent = stats.total_listings;
                 document.getElementById('activeListings').textContent = stats.active_listings;
@@ -2445,6 +2455,7 @@
         async function loadSources() {
             try {
                 const response = await fetch(`${API_BASE}/api/sources`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 allSources = await response.json();
 
                 const container = document.getElementById('sourcesButtons');
@@ -2493,6 +2504,10 @@
                     fetch(`${API_BASE}/api/cities`),
                     fetch(`${API_BASE}/api/towns?city=Toronto`)
                 ]);
+
+                if (!citiesResponse.ok || !torontoTownsResponse.ok) {
+                    throw new Error('Failed to load locations');
+                }
 
                 const cities = await citiesResponse.json();
                 const torontoTowns = await torontoTownsResponse.json();
@@ -2770,6 +2785,7 @@
                     const response = await fetch(`${API_BASE}/api/listings?${params}`, {
                         signal: listingsAbortController.signal
                     });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     listings = await response.json();
                     setCache(cacheKey, listings);
                 }
@@ -3433,7 +3449,7 @@
             autoRefreshInterval = setInterval(async () => {
                 try {
                     // Check if new listings exist by comparing counts
-                    const response = await fetch(`${API_BASE}/api/stats`, { signal: AbortSignal.timeout(5000) });
+                    const response = await fetch(`${API_BASE}/api/stats`, { signal: createTimeoutSignal(5000) });
                     if (response.ok) {
                         const stats = await response.json();
                         if (stats.total_listings !== lastListingCount) {

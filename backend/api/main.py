@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 import json
 import logging
 import asyncio
+import time
 
 from api.database import get_db, init_db, Listing, Schedule, Source, Tag, Location, Tier, listing_tags, engine
 from sqlalchemy.orm import joinedload
@@ -292,7 +293,6 @@ async def root():
 async def get_sources(db: Session = Depends(get_db)):
     """Get all scraping sources (cached for 5 minutes)"""
     global _sources_cache, _sources_cache_timestamp
-    import time
 
     current_time = time.time()
 
@@ -370,7 +370,6 @@ def get_tier_rates_cache(db: Session) -> dict:
     Uses global cache with TTL to avoid rebuilding on every request.
     """
     global _tier_cache, _tier_cache_timestamp
-    import time
 
     current_time = time.time()
 
@@ -825,13 +824,9 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
     """
     Rescrape a listing's profile and update the database with new values.
     """
-    # Log to both console and file - use print for immediate visibility
-    import sys
-    print(f"\n{'='*60}", flush=True)
-    print(f"REFRESH ENDPOINT CALLED: listing_id={listing_id}", flush=True)
-    print(f"{'='*60}\n", flush=True)
-    sys.stdout.flush()
-    logging.info(f"=== REFRESH ENDPOINT CALLED for listing_id={listing_id} ===")
+    logging.info(f"{'='*60}")
+    logging.info(f"REFRESH ENDPOINT CALLED: listing_id={listing_id}")
+    logging.info(f"{'='*60}")
     
     listing = db.query(Listing).filter(Listing.id == listing_id).first()
     if not listing:
@@ -845,8 +840,6 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
     if not source:
         raise HTTPException(status_code=404, detail="Source not found for listing")
     
-    print(f"Source found: name='{source.name}', id={source.id}", flush=True)
-    sys.stdout.flush()
     logging.info(f"Source found: name='{source.name}', id={source.id}")
     
     # Map source name to scraper registry key
@@ -895,10 +888,7 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
     scraper_class_name = scraper.__class__.__name__
     
     try:
-        # Log the scraper being used for debugging
-        print(f"🔄 Starting scrape with {scraper_class_name} for profile_url='{listing.profile_url}'", flush=True)
-        sys.stdout.flush()
-        logging.info(f"🔄 Refreshing listing {listing_id} using {scraper_class_name} (source: {source.name}, key: {scraper_key})")
+        logging.info(f"🔄 Refreshing listing {listing_id} using {scraper_class_name} for profile_url='{listing.profile_url}'")
         
         # Scrape the profile
         profile_data = await scraper.scrape_profile(listing.profile_url)

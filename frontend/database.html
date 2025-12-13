@@ -1433,7 +1433,9 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:8000';
+        const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:8000'
+            : `${window.location.protocol}//${window.location.hostname}:8000`;
         let currentTable = null;
         let currentPage = 1;
         let isRefreshing = false;
@@ -1451,6 +1453,13 @@
         let lastLogTimestamp = null;
         let logsAbortController = null;
         let logsCleared = false;
+
+        // Browser-compatible timeout signal (AbortSignal.timeout not supported in all browsers)
+        function createTimeoutSignal(ms) {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), ms);
+            return controller.signal;
+        }
 
         // Sorting state
         let sortColumn = null;
@@ -3148,7 +3157,7 @@
                 if (!backendOnline || isRefreshing) return;
                 try {
                     const response = await fetch(`${API_BASE}/db/stats`, {
-                        signal: AbortSignal.timeout(5000),
+                        signal: createTimeoutSignal(5000),
                         cache: 'no-cache'
                     });
                     if (response.ok) {
