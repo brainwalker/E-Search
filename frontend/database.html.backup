@@ -358,6 +358,10 @@
             max-height: none;
             overflow: visible;
             height: calc(100vh - 120px);
+            gap: 0;
+            padding: 0;
+            margin: 0;
+            top: 0;
         }
 
         body.logs-expanded #logsCard {
@@ -392,80 +396,15 @@
         }
 
         body.logs-expanded .sidebar-card:not(#logsCard) {
-            opacity: 0;
-            transform: scale(0.95);
-            height: 0;
-            overflow: hidden;
-            margin: 0;
-            padding: 0;
+            display: none;
         }
 
         body.logs-expanded .sidebar-toggle {
-            display: none;
+            display: block;
         }
 
         body.logs-expanded .main-content {
             gap: 0;
-        }
-
-        body.logs-expanded .left-sidebar {
-            padding: 0;
-            margin-top: 0;
-        }
-
-        /* Logs View (in dataContainer) */
-        .logs-view {
-            display: flex;
-            flex-direction: column;
-            height: calc(100vh - 220px);
-        }
-
-        .logs-view-header {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            margin-bottom: 16px;
-            flex-wrap: wrap;
-        }
-
-        .logs-view-header h3 {
-            margin: 0;
-            font-size: 1rem;
-            color: var(--text-primary);
-        }
-
-        .logs-view .logs-controls {
-            flex: 1;
-            margin: 0;
-        }
-
-        .logs-view .logs-container {
-            flex: 1;
-            max-height: none;
-            overflow-y: auto;
-        }
-
-        .logs-view .logs-status {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .logs-back-btn {
-            padding: 8px 16px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .logs-back-btn:hover {
-            background: var(--bg-card);
-            border-color: var(--accent-primary);
-            color: var(--text-primary);
         }
 
         /* Card collapse animation */
@@ -478,8 +417,12 @@
         }
 
         .sidebar-card:not(.collapsed) .sidebar-card-body {
-            max-height: 2000px;
             opacity: 1;
+        }
+
+        /* logsCard needs flex-based sizing, not max-height */
+        #logsCard:not(.collapsed) .sidebar-card-body {
+            max-height: none;
         }
 
         /* Sidebar Toggle */
@@ -515,7 +458,10 @@
             width: 350px;
             min-width: 260px;
             max-width: 800px;
+            max-height: calc(100vh - 200px);
+            overflow: hidden;
             transition: width 0.3s ease;
+            border: 2px solid yellow !important;
         }
 
         .sidebar-wrapper.collapsed {
@@ -530,10 +476,9 @@
             flex-direction: column;
             gap: 16px;
             width: 100%;
-            max-height: calc(100vh - 200px);
-            overflow-y: auto;
-            position: sticky;
-            top: 20px;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
             transition: opacity 0.3s ease;
         }
 
@@ -562,6 +507,12 @@
             display: flex;
             flex-direction: column;
             gap: 20px;
+            opacity: 1;
+            transform: translateX(0);
+            visibility: visible;
+            position: relative;
+            pointer-events: auto;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         /* Collapsible Sections */
@@ -1021,10 +972,58 @@
         /* Logs Section */
         .logs-controls {
             display: flex;
-            gap: 8px;
+            gap: 12px;
             align-items: center;
             flex-wrap: wrap;
             margin-bottom: 12px;
+            justify-content: space-between;
+        }
+
+        .logs-controls-left {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .log-action-btn {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .log-action-btn:hover {
+            background: var(--bg-card);
+            border-color: var(--accent-primary);
+            transform: scale(1.05);
+        }
+
+        .restart-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .restart-btn:hover {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
         }
 
         .logs-container {
@@ -1101,8 +1100,8 @@
         .logs-filters {
             display: flex;
             gap: 4px;
-            margin-bottom: 8px;
             flex-wrap: wrap;
+            align-items: center;
         }
 
         .log-filter-btn {
@@ -1472,7 +1471,44 @@
             border-radius: var(--radius);
             border: 1px solid var(--border-color);
             overflow: hidden;
-            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+
+        #logsCard {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: calc(100vh - 500px);
+            min-height: 150px;
+            border: 2px solid red !important;
+        }
+
+        #logsCard .sidebar-card-header {
+            flex-shrink: 0;
+        }
+
+        #logsCard:not(.collapsed) .sidebar-card-body {
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border: 2px solid green !important;
+        }
+
+        #logsCard:not(.collapsed) .logs-controls {
+            flex-shrink: 0;
+        }
+
+        #logsCard:not(.collapsed) .logs-container {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto !important;
+            border: 2px solid blue !important;
+        }
+
+        #logsCard:not(.collapsed) .logs-status {
+            flex-shrink: 0;
         }
 
         .sidebar-card-header {
@@ -1692,13 +1728,37 @@
                     </div>
 
                     <!-- Backend Logs -->
-                    <!-- Logs Link - Opens Full Screen Log View -->
-                    <button class="sidebar-card" id="logsCard" onclick="expandLogsView()" style="cursor: pointer; width: 100%; text-align: left;">
-                        <div class="sidebar-card-header" style="pointer-events: none;">
-                            <span class="sidebar-card-title">📋 View Logs</span>
-                            <span style="font-size: 0.8rem; color: var(--text-muted);">→</span>
+                    <div class="sidebar-card collapsed" id="logsCard">
+                        <div class="sidebar-card-header" onclick="toggleCard('logsCard')">
+                            <span class="sidebar-card-title">📋 Logs</span>
+                            <span class="collapse-icon">▼</span>
                         </div>
-                    </button>
+                        <div class="sidebar-card-body" style="padding: 12px;">
+                            <div class="logs-controls" style="margin-bottom: 8px;">
+                                <div class="logs-controls-left">
+                                    <button class="log-action-btn" id="pauseLogsBtn" onclick="event.stopPropagation(); toggleLogsPause()" title="Pause/Resume">
+                                        <span id="pauseIcon">⏸️</span>
+                                    </button>
+                                    <div class="logs-filters" onclick="event.stopPropagation();">
+                                        <button class="log-filter-btn active" data-filter="error" onclick="toggleLogFilter('error', this)" title="Errors">ERR</button>
+                                        <button class="log-filter-btn active" data-filter="warning" onclick="toggleLogFilter('warning', this)" title="Warnings">WARN</button>
+                                        <button class="log-filter-btn active" data-filter="info" onclick="toggleLogFilter('info', this)" title="Info">INFO</button>
+                                        <button class="log-filter-btn active" data-filter="debug" onclick="toggleLogFilter('debug', this)" title="Debug">DBG</button>
+                                        <button class="log-filter-btn" data-filter="http" onclick="toggleLogFilter('http', this)" title="HTTP requests (hidden by default)">HTTP</button>
+                                    </div>
+                                </div>
+                                <button class="restart-btn" onclick="event.stopPropagation(); restartBackend()" title="Restart backend">🔄 Restart</button>
+                            </div>
+                            <div class="logs-container" id="logsContainer">
+                                <div class="loading"><p>Loading...</p></div>
+                            </div>
+                            <div class="logs-status" style="font-size: 0.75rem;">
+                                <span id="autoScrollIndicator" class="auto-scroll-indicator"></span>
+                                <span id="logsStatusText">Auto</span>
+                                <span id="logsCount" style="margin-left: auto;">0</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="sidebar-resizer" id="sidebarResizer"></div>
             </div>
@@ -2030,6 +2090,9 @@
             btn.innerHTML = `⏳ Scraping...`;
 
             showScrapeStatus(apiName.toUpperCase());
+
+            // Auto-expand log view
+            expandLogsView();
 
             // Start polling logs for progress updates
             let progressPollInterval = null;
@@ -2757,11 +2820,6 @@
                 return;
             }
 
-            // Don't load if logsContainer doesn't exist (logs view not open)
-            if (!document.getElementById('logsContainer')) {
-                return;
-            }
-
             // Cancel any in-flight request
             if (logsAbortController) {
                 logsAbortController.abort();
@@ -2940,7 +2998,6 @@
 
         function initLogFilters() {
             const container = document.getElementById('logsContainer');
-            if (!container) return;
             // Apply initial filter states
             Object.entries(logFilters).forEach(([filter, enabled]) => {
                 if (!enabled) {
@@ -2952,18 +3009,15 @@
         function toggleLogsPause() {
             logsPaused = !logsPaused;
             const pauseIcon = document.getElementById('pauseIcon');
-            const pauseText = document.getElementById('pauseText');
             const indicator = document.getElementById('autoScrollIndicator');
             const statusText = document.getElementById('logsStatusText');
 
             if (logsPaused) {
                 pauseIcon.textContent = '▶️';
-                pauseText.textContent = 'Resume';
                 indicator.classList.add('paused');
                 statusText.textContent = 'Paused';
             } else {
                 pauseIcon.textContent = '⏸️';
-                pauseText.textContent = 'Pause';
                 indicator.classList.remove('paused');
                 statusText.textContent = 'Auto-updating...';
                 document.getElementById('logsContainer').scrollTop = document.getElementById('logsContainer').scrollHeight;
@@ -3040,60 +3094,32 @@
             }
         }
 
-        // Logs view in dataContainer
+        // Expand logs view to full screen
         function expandLogsView() {
-            const container = document.getElementById('dataContainer');
+            const logsCard = document.getElementById('logsCard');
+            const wrapper = document.getElementById('sidebarWrapper');
 
-            // Deselect table tabs
-            document.querySelectorAll('.table-tab').forEach(btn => btn.classList.remove('active'));
+            if (!logsCard || logsCard.classList.contains('collapsed') === false && document.body.classList.contains('logs-expanded')) {
+                return; // Already expanded
+            }
 
-            container.innerHTML = `
-                <div class="logs-view">
-                    <div class="logs-view-header">
-                        <button class="logs-back-btn" onclick="closeLogsView()">← Back</button>
-                        <h3>📋 Backend Logs</h3>
-                        <div class="logs-controls">
-                            <div class="logs-controls-left">
-                                <button class="log-action-btn" id="pauseLogsBtn" onclick="toggleLogsPause()" title="Pause/Resume">
-                                    <span id="pauseIcon">⏸️</span>
-                                </button>
-                                <div class="logs-filters">
-                                    <button class="log-filter-btn active" data-filter="error" onclick="toggleLogFilter('error', this)" title="Errors">ERR</button>
-                                    <button class="log-filter-btn active" data-filter="warning" onclick="toggleLogFilter('warning', this)" title="Warnings">WARN</button>
-                                    <button class="log-filter-btn active" data-filter="info" onclick="toggleLogFilter('info', this)" title="Info">INFO</button>
-                                    <button class="log-filter-btn active" data-filter="debug" onclick="toggleLogFilter('debug', this)" title="Debug">DBG</button>
-                                    <button class="log-filter-btn" data-filter="http" onclick="toggleLogFilter('http', this)" title="HTTP requests">HTTP</button>
-                                </div>
-                            </div>
-                            <button class="restart-btn" onclick="restartBackend()" title="Restart backend">🔄 Restart</button>
-                        </div>
-                    </div>
-                    <div class="logs-container" id="logsContainer">
-                        <div class="loading"><p>Loading...</p></div>
-                    </div>
-                    <div class="logs-status">
-                        <span id="autoScrollIndicator" class="auto-scroll-indicator"></span>
-                        <span id="logsStatusText">Auto-scrolling</span>
-                        <span id="logsCount" style="margin-left: auto;">0 lines</span>
-                    </div>
-                </div>
-            `;
+            // Expand the logs card if collapsed
+            if (logsCard.classList.contains('collapsed')) {
+                logsCard.classList.remove('collapsed');
+            }
 
-            // Collapse sidebar
-            collapseSidebar();
+            // Collapse other cards
+            document.querySelectorAll('.sidebar-card').forEach(card => {
+                if (card.id !== 'logsCard' && !card.classList.contains('collapsed')) {
+                    card.classList.add('collapsed');
+                }
+            });
 
-            // Initialize filters and load logs
-            initLogFilters();
-            loadLogs();
-            startLogsAutoUpdate();
-        }
-
-        function closeLogsView() {
-            // Go back to showing the table or default view
-            if (currentTable) {
-                loadTable(currentTable, currentPage);
-            } else {
-                document.getElementById('dataContainer').innerHTML = '<div class="loading"><p>Select a table or execute a query to view data</p></div>';
+            // Expand to full width
+            document.body.classList.add('logs-expanded');
+            if (wrapper) {
+                wrapper.classList.remove('collapsed');
+                wrapper.style.width = '100%';
             }
         }
 
@@ -3183,6 +3209,8 @@
                     document.body.classList.add('logs-expanded');
                     wrapper.classList.remove('collapsed');
                     wrapper.style.width = '100%';
+                    // Ensure logs are loaded when expanding
+                    loadLogs();
                 } else {
                     // Collapse logs, restore normal view
                     document.body.classList.remove('logs-expanded');
