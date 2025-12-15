@@ -87,8 +87,13 @@ class Listing(Base):
     hair_color = Column(String)
     service_type = Column(String)  # GF ENTERTAINER, GFE, etc.
 
-    # Note: Rates are now retrieved via the tier field from the tiers table
-    # This avoids data duplication and ensures consistent pricing
+    # Pricing - nullable columns for sources with variable per-listing pricing
+    # When null, falls back to tier-based pricing from tiers table
+    incall_30min = Column(String)   # e.g., "$250" or null
+    incall_45min = Column(String)   # e.g., "$300" or null
+    incall_1hr = Column(String)     # e.g., "$350" or null
+    outcall_1hr = Column(String)    # e.g., "$400" or null
+    min_booking = Column(String)    # e.g., "30min", "45min", "1hr" - minimum booking time
 
     # Images
     images = Column(Text)  # JSON array of image URLs

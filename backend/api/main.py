@@ -239,13 +239,15 @@ class SourceResponse(BaseModel):
 
 
 class TierRatesResponse(BaseModel):
-    """Tier rates from the tiers table"""
-    tier: str
-    star: int
-    incall_30min: Optional[str]
-    incall_45min: Optional[str]
-    incall_1hr: Optional[str]
-    outcall_per_hr: Optional[str]
+    """Tier rates from the tiers table or listing-level pricing"""
+    tier: Optional[str] = None  # Optional for listing-level pricing
+    star: Optional[int] = None  # Optional for listing-level pricing
+    incall_30min: Optional[str] = None
+    incall_45min: Optional[str] = None
+    incall_1hr: Optional[str] = None
+    outcall_per_hr: Optional[str] = None
+    min_booking: Optional[str] = None  # Minimum booking time (for variable pricing)
+    source: Optional[str] = None  # "tier" or "listing" - indicates pricing source
 
     class Config:
         from_attributes = True
@@ -321,6 +323,7 @@ async def scrape_source(
         "dd": "discreet",
         "discreet": "discreet",
         "discreetdolls": "discreet",
+        "mirage": "mirage",
     }
 
     source_key = source_map.get(source_name.lower())
@@ -407,7 +410,7 @@ def invalidate_tier_cache():
 
 
 def enrich_listing_with_tier_rates(listing: Listing, tier_cache: dict) -> dict:
-    """Convert listing to dict with tier rates from cache"""
+    """Convert listing to dict with tier rates from cache or listing-level pricing"""
     # Build the base response
     result = {
         "id": listing.id,
@@ -436,13 +439,33 @@ def enrich_listing_with_tier_rates(listing: Listing, tier_cache: dict) -> dict:
         "tags": listing.tags,
         "source": listing.source,
     }
-    
-    # Lookup tier rates if tier exists
-    if listing.tier and listing.source_id:
+
+    # Check for listing-level pricing first (for sources with variable pricing)
+    has_listing_prices = any([
+        listing.incall_30min,
+        listing.incall_45min,
+        listing.incall_1hr,
+        listing.outcall_1hr
+    ])
+
+    if has_listing_prices:
+        # Use listing-level pricing
+        result["tier_rates"] = {
+            "incall_30min": listing.incall_30min,
+            "incall_45min": listing.incall_45min,
+            "incall_1hr": listing.incall_1hr,
+            "outcall_per_hr": listing.outcall_1hr,
+            "min_booking": listing.min_booking,
+            "source": "listing"  # Indicate pricing came from listing
+        }
+    elif listing.tier and listing.source_id:
+        # Fall back to tier-based pricing
         key = (listing.source_id, listing.tier.upper())
         if key in tier_cache:
-            result["tier_rates"] = tier_cache[key]
-    
+            tier_rates = tier_cache[key].copy()
+            tier_rates["source"] = "tier"  # Indicate pricing came from tier table
+            result["tier_rates"] = tier_rates
+
     return result
 
 
@@ -708,8 +731,10 @@ async def debug_listing_extraction(listing_id: int, db: Session = Depends(get_db
     source_name_to_key = {
         'SFT': 'sft',
         'DD': 'discreet',
+        'Mirage': 'mirage',
         'SexyFriendsToronto': 'sft',  # Legacy support
         'DiscreetDolls': 'discreet',  # Legacy support
+        'MirageEntertainment': 'mirage',  # Legacy support
     }
     
     # Try exact match first, then case-insensitive
@@ -848,8 +873,10 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
     source_name_to_key = {
         'SFT': 'sft',
         'DD': 'discreet',
+        'Mirage': 'mirage',
         'SexyFriendsToronto': 'sft',  # Legacy support
         'DiscreetDolls': 'discreet',  # Legacy support
+        'MirageEntertainment': 'mirage',  # Legacy support
     }
     
     # Log for debugging

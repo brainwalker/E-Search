@@ -111,12 +111,13 @@ SITES = {
 
     'mirage': SiteConfig(
         name='MirageEntertainment',
-        short_name='MIRAGE',
+        short_name='Mirage',
         schedule_url='https://mirage-entertainment.cc/toronto-escorts-schedule/',
-        base_url='https://mirage-entertainment.cc/',
-        scraper_type=ScraperType.JAVASCRIPT,
-        rate_limit_seconds=2.0,
-        enabled=False,
+        base_url='https://mirage-entertainment.cc/escort/',
+        image_base_url='https://mirage-entertainment.cc/wp-content/uploads/',
+        scraper_type=ScraperType.STATIC,  # Uses static HTML, no JS needed
+        rate_limit_seconds=1.5,
+        enabled=True,
     ),
 
     'topdrawer': SiteConfig(

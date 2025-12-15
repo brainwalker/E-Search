@@ -100,6 +100,7 @@ async def get_table_data(
         columns_order = """id, name, tier, age, nationality, ethnicity,
                           bust, measurements, height, weight,
                           eye_color, hair_color, service_type, bust_type,
+                          incall_30min, incall_45min, incall_1hr, outcall_1hr, min_booking,
                           profile_url, source_id, images,
                           is_active, is_expired, created_at, updated_at"""
         data_query = text(f"SELECT {columns_order} FROM {table_name} {where_clause} LIMIT :limit OFFSET :offset")

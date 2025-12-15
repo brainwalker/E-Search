@@ -413,6 +413,35 @@
             margin-top: 0;
         }
 
+<<<<<<< Updated upstream
+=======
+        /* Logs View (in dataContainer) */
+        .logs-view {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 220px);
+        }
+
+        .logs-view-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .logs-view .logs-container {
+            flex: 1;
+            max-height: none;
+            overflow-y: auto;
+        }
+
+        .logs-view .logs-status {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+        }
+
+>>>>>>> Stashed changes
         /* Card collapse animation */
         .sidebar-card.collapsed .sidebar-card-body {
             max-height: 0;
@@ -1857,13 +1886,16 @@
                     document.getElementById('dataContainer').innerHTML = '<div class="loading"><p>Select a table or execute a query to view data</p></div>';
                 }
 
-                if (backendOnline) {
+                setBackendStatus(true);
+
+                // Reload logs if logs view is open
+                const logsContainer = document.getElementById('logsContainer');
+                if (logsContainer) {
                     stopLogsAutoUpdate();
+                    lastLogTimestamp = null; // Reset to get fresh logs
                     await loadLogs().catch(() => {}); // Silently fail logs
                     startLogsAutoUpdate();
                 }
-
-                setBackendStatus(true);
             } catch (error) {
                 // Only log non-connection errors
                 if (!error.message.includes('Failed to fetch') && !error.message.includes('ERR_CONNECTION_REFUSED') && !error.message.includes('not responding')) {
@@ -2747,10 +2779,13 @@
 
                 if (!response.ok) {
                     if (response.status === 404) {
-                        document.getElementById('logsContainer').innerHTML = `<div style="color: #fbbf24; text-align: center; padding: 20px;">
-                            <p><strong>⚠️ Logs endpoint not available</strong></p>
-                            <p>Please restart the backend server.</p>
-                        </div>`;
+                        const logsContainer = document.getElementById('logsContainer');
+                        if (logsContainer) {
+                            logsContainer.innerHTML = `<div style="color: #fbbf24; text-align: center; padding: 20px;">
+                                <p><strong>⚠️ Logs endpoint not available</strong></p>
+                                <p>Please restart the backend server.</p>
+                            </div>`;
+                        }
                         stopLogsAutoUpdate();
                         setBackendStatus(false);
                         return;
@@ -2761,6 +2796,11 @@
                 const data = await response.json();
                 const container = document.getElementById('logsContainer');
                 const countEl = document.getElementById('logsCount');
+
+                // Check if logs view was closed during fetch
+                if (!container || !countEl) {
+                    return;
+                }
 
                 if (!data.file_exists) {
                     container.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 20px;">${data.message || 'No logs yet.'}</div>`;
@@ -2814,6 +2854,14 @@
                 // Only log error if it's not a connection refused (backend is down)
                 if (!error.message.includes('Failed to fetch') && !error.message.includes('ERR_CONNECTION_REFUSED')) {
                     console.error('Error loading logs:', error);
+                }
+                // Show reconnecting message in logs container
+                const logsContainer = document.getElementById('logsContainer');
+                if (logsContainer && !logsContainer.innerHTML.includes('Backend offline')) {
+                    logsContainer.innerHTML = `<div style="color: var(--accent-primary); text-align: center; padding: 20px;">
+                        <p><strong>⚠️ Backend offline</strong></p>
+                        <p>Waiting to reconnect...</p>
+                    </div>`;
                 }
                 // Mark backend as offline and stop auto-updates
                 setBackendStatus(false);
@@ -2876,8 +2924,10 @@
 
         function clearLogs() {
             const container = document.getElementById('logsContainer');
+            const countEl = document.getElementById('logsCount');
+            if (!container) return;
             container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 20px;">Logs cleared</div>';
-            document.getElementById('logsCount').textContent = '0 lines';
+            if (countEl) countEl.textContent = '0 lines';
             // Set the timestamp to current time to only show NEW logs from this point forward
             lastLogTimestamp = new Date().toISOString();
             logsCleared = true;
@@ -2897,7 +2947,9 @@
             btn.classList.toggle('active', logFilters[filterType]);
 
             const container = document.getElementById('logsContainer');
-            container.classList.toggle(`hide-${filterType}`, !logFilters[filterType]);
+            if (container) {
+                container.classList.toggle(`hide-${filterType}`, !logFilters[filterType]);
+            }
         }
 
         function initLogFilters() {
@@ -2918,16 +2970,17 @@
             const statusText = document.getElementById('logsStatusText');
 
             if (logsPaused) {
-                pauseIcon.textContent = '▶️';
-                pauseText.textContent = 'Resume';
-                indicator.classList.add('paused');
-                statusText.textContent = 'Paused';
+                if (pauseIcon) pauseIcon.textContent = '▶️';
+                if (pauseText) pauseText.textContent = 'Resume';
+                if (indicator) indicator.classList.add('paused');
+                if (statusText) statusText.textContent = 'Paused';
             } else {
-                pauseIcon.textContent = '⏸️';
-                pauseText.textContent = 'Pause';
-                indicator.classList.remove('paused');
-                statusText.textContent = 'Auto-updating...';
-                document.getElementById('logsContainer').scrollTop = document.getElementById('logsContainer').scrollHeight;
+                if (pauseIcon) pauseIcon.textContent = '⏸️';
+                if (pauseText) pauseText.textContent = 'Pause';
+                if (indicator) indicator.classList.remove('paused');
+                if (statusText) statusText.textContent = 'Auto-updating...';
+                const logsContainer = document.getElementById('logsContainer');
+                if (logsContainer) logsContainer.scrollTop = logsContainer.scrollHeight;
             }
         }
 
@@ -2971,8 +3024,11 @@
                 if (response.ok) {
                     // Backend will restart, show reconnecting state
                     setBackendStatus(false);
-                    document.getElementById('logsContainer').innerHTML =
-                        '<div style="color: var(--accent-primary); text-align: center; padding: 20px;">🔄 Backend restarting...</div>';
+                    const logsContainer = document.getElementById('logsContainer');
+                    if (logsContainer) {
+                        logsContainer.innerHTML =
+                            '<div style="color: var(--accent-primary); text-align: center; padding: 20px;">🔄 Backend restarting...</div>';
+                    }
 
                     // Wait and then try to reconnect
                     setTimeout(async () => {
@@ -2987,8 +3043,11 @@
                 // Connection lost is expected during restart
                 if (error.message.includes('Failed to fetch')) {
                     setBackendStatus(false);
-                    document.getElementById('logsContainer').innerHTML =
-                        '<div style="color: var(--accent-primary); text-align: center; padding: 20px;">🔄 Backend restarting...</div>';
+                    const logsContainer = document.getElementById('logsContainer');
+                    if (logsContainer) {
+                        logsContainer.innerHTML =
+                            '<div style="color: var(--accent-primary); text-align: center; padding: 20px;">🔄 Backend restarting...</div>';
+                    }
 
                     setTimeout(async () => {
                         lastLogTimestamp = null;
@@ -3001,6 +3060,60 @@
             }
         }
 
+<<<<<<< Updated upstream
+=======
+        // Logs view in dataContainer
+        function expandLogsView() {
+            const container = document.getElementById('dataContainer');
+
+            // Deselect table tabs
+            document.querySelectorAll('.table-tab').forEach(btn => btn.classList.remove('active'));
+
+            container.innerHTML = `
+                <div class="logs-view">
+                    <div class="logs-view-header">
+                        <button class="log-action-btn" id="pauseLogsBtn" onclick="toggleLogsPause()" title="Pause/Resume">
+                            <span id="pauseIcon">⏸️</span>
+                        </button>
+                        <div class="logs-filters">
+                            <button class="log-filter-btn active" data-filter="error" onclick="toggleLogFilter('error', this)" title="Errors">ERR</button>
+                            <button class="log-filter-btn active" data-filter="warning" onclick="toggleLogFilter('warning', this)" title="Warnings">WARN</button>
+                            <button class="log-filter-btn active" data-filter="info" onclick="toggleLogFilter('info', this)" title="Info">INFO</button>
+                            <button class="log-filter-btn active" data-filter="debug" onclick="toggleLogFilter('debug', this)" title="Debug">DBG</button>
+                            <button class="log-filter-btn" data-filter="http" onclick="toggleLogFilter('http', this)" title="HTTP requests">HTTP</button>
+                        </div>
+                        <button class="restart-btn" onclick="restartBackend()" title="Restart backend" style="margin-left: auto;">🔄 Restart</button>
+                    </div>
+                    <div class="logs-container" id="logsContainer">
+                        <div class="loading"><p>Loading...</p></div>
+                    </div>
+                    <div class="logs-status">
+                        <span id="autoScrollIndicator" class="auto-scroll-indicator"></span>
+                        <span id="logsStatusText">Auto-scrolling</span>
+                        <span id="logsCount" style="margin-left: auto;">0 lines</span>
+                    </div>
+                </div>
+            `;
+
+            // Collapse sidebar
+            collapseSidebar();
+
+            // Initialize filters and load logs
+            initLogFilters();
+            loadLogs();
+            startLogsAutoUpdate();
+        }
+
+        function closeLogsView() {
+            // Go back to showing the table or default view
+            if (currentTable) {
+                loadTable(currentTable, currentPage);
+            } else {
+                document.getElementById('dataContainer').innerHTML = '<div class="loading"><p>Select a table or execute a query to view data</p></div>';
+            }
+        }
+
+>>>>>>> Stashed changes
         // Sidebar
         function toggleSidebar() {
             const sidebar = document.getElementById('leftSidebar');
