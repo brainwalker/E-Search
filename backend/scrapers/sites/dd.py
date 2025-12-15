@@ -423,6 +423,42 @@ class DDScraper(BaseScraper):
         """Parse profile page HTML."""
         profile = {}
 
+        # Try to extract name from profile page (more reliable than schedule card)
+        # Look for h1, h2, or title elements that might contain the proper name
+        name_candidates = []
+        
+        # Check page title
+        title_tag = soup.find('title')
+        if title_tag:
+            title_text = title_tag.get_text(strip=True)
+            # Title might be like "Aeryn Monroe - DiscreetDolls" or "Aeryn Monroe | DD"
+            if ' - ' in title_text:
+                name_candidates.append(title_text.split(' - ')[0].strip())
+            elif ' | ' in title_text:
+                name_candidates.append(title_text.split(' | ')[0].strip())
+        
+        # Check h1 heading
+        h1 = soup.find('h1')
+        if h1:
+            h1_text = h1.get_text(strip=True)
+            if h1_text and len(h1_text) < 50:  # Reasonable name length
+                name_candidates.append(h1_text)
+        
+        # Check for name in header/banner area
+        header_name = soup.find('div', class_='doll-name') or soup.find('span', class_='name')
+        if header_name:
+            name_candidates.append(header_name.get_text(strip=True))
+        
+        # Use the first valid candidate that has a space (proper two-word name)
+        for candidate in name_candidates:
+            if candidate and ' ' in candidate and len(candidate) < 50:
+                profile['name'] = candidate
+                self.logger.debug(f"Extracted name from profile page for {profile_slug}: {candidate}")
+                break
+        
+        if not profile.get('name'):
+            self.logger.debug(f"No name found on profile page for {profile_slug}, candidates: {name_candidates}")
+
         # Find stats table (left side info)
         stats_table = soup.find('div', class_='doll-table-info')
 
@@ -479,7 +515,7 @@ class DDScraper(BaseScraper):
                     if not profile.get('bust'):
                         bust_from_fig = re.match(r'(\d+[A-Za-z]+)', measurements)
                         if bust_from_fig:
-                            profile['bust'] = bust_from_fig.group(1)
+                            profile['bust'] = normalize_bust_size(bust_from_fig.group(1))
 
             # Nationality - handle patterns like "Nationality: European" or "Nationality: Spanish & Columbian"
             nat_match = re.search(r'Nationality[:\s]+([A-Za-z\s/&-]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
@@ -493,14 +529,13 @@ class DDScraper(BaseScraper):
             # "Ethnicity: Caucasian"
             # "Ethnicity: Caucasian (Irish, British, German)"
             # "Ethnicity: Caucasian (French/Scottish)"
+            # Stop before next field label like "Nationality:"
             eth_match = re.search(
-                r'Ethnicity[:\s]+([A-Za-z\s/]+(?:\([^)]+\))?)',
+                r'Ethnicity[:\s]+([A-Za-z]+(?:\s*\([^)]+\))?)',
                 text, re.IGNORECASE
             )
             if eth_match:
                 ethnicity = eth_match.group(1).strip()
-                # Stop at next field label if captured
-                ethnicity = re.sub(r'\s+(?:Age|Height|Weight|Bust|Hair|Eyes?|Service|Nationality|Figure|Measurements)[:\s].*$', '', ethnicity, flags=re.IGNORECASE)
                 ethnicity = ethnicity.strip().rstrip('.,;:')
                 if ethnicity and len(ethnicity) > 1:
                     profile['ethnicity'] = ethnicity.title()

@@ -148,52 +148,131 @@ class MirageScraper(BaseScraper):
 
     async def scrape_schedule(self) -> List[ScheduleItem]:
         """
-        Scrape the schedule page to get list of escorts.
+        Scrape the schedule page to get list of escorts with their schedules.
 
-        Returns list of ScheduleItem with basic info (name, profile_url).
-        Full schedule is extracted from individual profile pages.
+        The schedule page has a table where:
+        - Each row is an escort (with name in id attribute)
+        - Each column is a day (Monday-Sunday)
+        - Cell content: Location<br/>StartTime-EndTime or ~ for not available
+
+        Returns list of ScheduleItem with schedule info including times.
         """
         self.logger.info(f"Fetching schedule from {self.config.schedule_url}")
         soup = await self.crawler.fetch_soup(self.config.schedule_url)
         return self._parse_schedule(soup)
 
     def _parse_schedule(self, soup: BeautifulSoup) -> List[ScheduleItem]:
-        """Parse the schedule page HTML to extract escort profile URLs."""
+        """Parse the schedule page HTML to extract escorts and their schedules."""
         items = []
-        seen_urls = set()
+        seen_profiles = {}  # profile_slug -> list of schedule items
 
-        # Find all escort profile links
-        for link in soup.find_all('a', href=True):
-            href = link.get('href', '')
+        # Day columns in order: Monday(0) through Sunday(6)
+        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
-            # Match profile URLs like https://mirage-entertainment.cc/escort/name/
-            if '/escort/' in href and href not in seen_urls:
-                seen_urls.add(href)
+        # Find all table rows with escort schedules
+        for row in soup.find_all('tr'):
+            row_id = row.get('id', '')
+            if not row_id:
+                continue
 
-                # Extract profile slug from URL
-                match = re.search(r'/escort/([^/]+)/?', href)
-                if match:
-                    profile_slug = match.group(1)
+            # Find profile link in this row
+            profile_link = row.find('a', href=re.compile(r'/escort/'))
+            if not profile_link:
+                continue
 
-                    # Get name from link text or slug
-                    name = link.get_text(strip=True)
-                    if not name or len(name) < 2:
-                        name = profile_slug.replace('-', ' ').title()
+            href = profile_link.get('href', '')
+            match = re.search(r'/escort/([^/]+)/?', href)
+            if not match:
+                continue
 
-                    # Clean name
-                    name = parse_mirage_name(name)
+            profile_slug = match.group(1)
+            name = parse_mirage_name(row_id)
 
-                    if len(name) >= 2:
-                        items.append(ScheduleItem(
-                            name=normalize_name(name),
-                            profile_url=profile_slug,
-                            day_of_week='',  # Will be filled from profile page
-                            location=None,
-                            tier=None,  # Will be extracted from profile
-                        ))
+            if len(name) < 2:
+                continue
 
-        self.logger.info(f"Found {len(items)} unique escorts on schedule page")
+            # Parse each day's cell
+            # First cell (index 0) is the profile image, days start from index 1
+            cells = row.find_all('td')
+
+            for cell_idx, cell in enumerate(cells):
+                # Skip first cell (profile image) and limit to 7 days
+                if cell_idx == 0:
+                    continue
+                if cell_idx > 7:
+                    break
+
+                day_idx = cell_idx - 1  # Monday=0, Tuesday=1, etc.
+                cell_text = cell.get_text(' ', strip=True)
+
+                # Skip empty or unavailable cells
+                if not cell_text or cell_text == '~' or cell_text.strip() == '':
+                    continue
+
+                # Parse cell: "DT 11:30AM-3:30PM" or "DT 11;30AM-3:30PM"
+                # Location is usually 2-3 chars, followed by time range
+                location = None
+                start_time = None
+                end_time = None
+
+                # Extract location (DT, NY, etc.)
+                loc_match = re.match(r'^([A-Z]{2,3})\b', cell_text)
+                if loc_match:
+                    loc_code = loc_match.group(1)
+                    # Map location codes
+                    loc_map = {
+                        'DT': 'Downtown',
+                        'NY': 'North York',
+                        'MK': 'Markham',
+                        'AP': 'Airport',
+                    }
+                    location = loc_map.get(loc_code, loc_code)
+
+                # Extract time range: "11:30AM-3:30PM" or "11;30AM-3:30PM" or "4:30PM- 10PM"
+                time_match = re.search(
+                    r'(\d{1,2}[;:]?\d{0,2}\s*[AP]M)\s*[-–]\s*(\d{1,2}[;:]?\d{0,2}\s*[AP]M)',
+                    cell_text,
+                    re.IGNORECASE
+                )
+                if time_match:
+                    start_time = time_match.group(1).replace(';', ':').strip()
+                    end_time = time_match.group(2).replace(';', ':').strip()
+                    # Normalize: "1030AM" -> "10:30AM", "10PM" -> "10:00PM"
+                    start_time = self._normalize_time(start_time)
+                    end_time = self._normalize_time(end_time)
+
+                if location or start_time:
+                    day_name = day_names[day_idx] if day_idx < len(day_names) else f'Day{day_idx}'
+
+                    items.append(ScheduleItem(
+                        name=normalize_name(name),
+                        profile_url=profile_slug,
+                        day_of_week=day_name,
+                        location=location,
+                        start_time=start_time,
+                        end_time=end_time,
+                        tier=None,  # Will be extracted from profile
+                    ))
+
+        self.logger.info(f"Found {len(items)} schedule entries from schedule page")
         return items
+
+    def _normalize_time(self, time_str: str) -> str:
+        """Normalize time string to consistent format like '10:30 AM'."""
+        if not time_str:
+            return None
+
+        time_str = time_str.upper().strip()
+
+        # Handle "1030AM" -> "10:30AM"
+        match = re.match(r'^(\d{1,2}):?(\d{2})?\s*(AM|PM)$', time_str)
+        if match:
+            hour = match.group(1)
+            minutes = match.group(2) or '00'
+            ampm = match.group(3)
+            return f"{hour}:{minutes} {ampm}"
+
+        return time_str
 
     async def scrape_profile(self, profile_url: str) -> Dict[str, Any]:
         """
@@ -406,6 +485,23 @@ class MirageScraper(BaseScraper):
         outcall_1hr = profile_data.get('outcall_1hr')
         min_booking = profile_data.get('min_booking')
 
+        # Use schedules from schedule page (has times) instead of profile page (no times)
+        # Filter all_schedule_items to get only this escort's schedules
+        schedules = []
+        if all_schedule_items:
+            for item in all_schedule_items:
+                if item.profile_url == schedule_item.profile_url:
+                    schedules.append({
+                        'day_of_week': item.day_of_week,
+                        'location': item.location,
+                        'start_time': item.start_time,
+                        'end_time': item.end_time,
+                    })
+
+        # Fall back to profile schedules if none from schedule page
+        if not schedules:
+            schedules = profile_data.get('schedules', [])
+
         return ScrapedListing(
             name=normalize_name(name),
             profile_url=schedule_item.profile_url,
@@ -429,7 +525,7 @@ class MirageScraper(BaseScraper):
             min_booking=min_booking,
             images=profile_data.get('images', []),
             tags=profile_data.get('tags', []),
-            schedules=profile_data.get('schedules', []),
+            schedules=schedules,
         )
 
     async def run(self):

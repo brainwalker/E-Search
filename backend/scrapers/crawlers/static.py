@@ -108,7 +108,16 @@ class StaticCrawler:
             try:
                 # Set cookies for this request if provided
                 response = await client.get(url, cookies=cookies)
-                response.raise_for_status()
+
+                # Some sites return 500 but still have valid content
+                # Only raise for status if response is empty or clearly an error page
+                if response.status_code >= 400:
+                    # Check if response has substantial content (likely valid despite status)
+                    if len(response.text) > 1000 and '<html' in response.text.lower():
+                        logger.warning(f"Got status {response.status_code} but response has content, proceeding")
+                        return response.text
+                    response.raise_for_status()
+
                 return response.text
 
             except httpx.HTTPError as e:

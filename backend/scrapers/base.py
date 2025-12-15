@@ -428,8 +428,12 @@ class BaseScraper(ABC):
             'end_time': item.end_time,
         } for item in all_schedule_items]
 
+        # Prefer name from profile_data if available (might have proper spacing)
+        # Fall back to schedule_item.name
+        name = profile_data.get('name') or schedule_item.name
+        
         return ScrapedListing(
-            name=schedule_item.name,
+            name=name,
             profile_url=schedule_item.profile_url,
             source=self.config.short_name,
             tier=tier,

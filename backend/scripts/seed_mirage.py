@@ -58,7 +58,8 @@ def seed_mirage():
 
         db.commit()
 
-        # Seed tiers (only Regular and VIP - PLATINUM VIP uses per-listing pricing)
+        # Seed tiers
+        # PLATINUM VIP has per-listing pricing, but we still add it for star lookup
         print("\nSeeding Mirage tiers...")
         tiers_data = [
             {
@@ -77,7 +78,14 @@ def seed_mirage():
                 "incall_1hr": "$300",
                 "outcall_per_hr": None
             },
-            # PLATINUM VIP not added - uses per-listing pricing
+            {
+                "tier": "Platinum VIP",  # Uses per-listing pricing, but needs entry for star display
+                "star": 3,
+                "incall_30min": None,  # Variable per-listing
+                "incall_45min": None,
+                "incall_1hr": None,
+                "outcall_per_hr": None
+            },
         ]
 
         for tier_data in tiers_data:
@@ -120,7 +128,7 @@ def seed_mirage():
         for t in tiers:
             print(f"  Star {t.star}: {t.tier} - {t.incall_30min} / {t.incall_1hr}")
 
-        print("\nNote: PLATINUM VIP tier uses per-listing pricing (stored on listing)")
+        print("\nNote: Platinum VIP tier uses per-listing pricing (prices stored on listing)")
 
     except Exception as e:
         db.rollback()

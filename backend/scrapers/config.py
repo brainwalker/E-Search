@@ -112,7 +112,7 @@ SITES = {
     'mirage': SiteConfig(
         name='MirageEntertainment',
         short_name='Mirage',
-        schedule_url='https://mirage-entertainment.cc/toronto-escorts-schedule/',
+        schedule_url='https://mirage-entertainment.cc/toronto-escorts/',  # Main page has schedule with times
         base_url='https://mirage-entertainment.cc/escort/',
         image_base_url='https://mirage-entertainment.cc/wp-content/uploads/',
         scraper_type=ScraperType.STATIC,  # Uses static HTML, no JS needed

@@ -33,7 +33,8 @@
       "Bash(sed:*)",
       "Bash(for url in sunshine kaitlyn kimmy)",
       "Bash(do echo \"=== $url ===\" curl -s \"https://mirage-entertainment.cc/escort/$url/\")",
-      "Bash(PYTHONPATH=. python3:*)"
+      "Bash(PYTHONPATH=. python3:*)",
+      "Bash(. .venv/bin/activate)"
     ],
     "deny": [],
     "ask": []

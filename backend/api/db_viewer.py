@@ -375,16 +375,19 @@ async def restart_backend():
 
         await asyncio.sleep(0.5)
 
-        # Start new uvicorn process
-        venv_python = backend_dir / ".venv" / "bin" / "python"
-        if not venv_python.exists():
-            venv_python = sys.executable
-
+        # Start new uvicorn process using nohup to ensure it survives
+        python_executable = sys.executable
+        logging.info(f"Starting new process with: {python_executable}")
+        logging.info(f"Working directory: {backend_dir}")
+        
+        # Use nohup and redirect output to log file
+        log_file = backend_dir / "data" / "restart_output.log"
+        cmd = f'nohup {python_executable} -m uvicorn api.main:app --reload --host 0.0.0.0 --port 8000 > "{log_file}" 2>&1 &'
+        
         subprocess.Popen(
-            [str(venv_python), "-m", "uvicorn", "api.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"],
+            cmd,
+            shell=True,
             cwd=str(backend_dir),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
             start_new_session=True
         )
 

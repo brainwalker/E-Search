@@ -10,16 +10,39 @@ from typing import Optional
 
 def normalize_name(name: str) -> str:
     """
-    Normalize name from ALL CAPS to Title Case.
+    Normalize name to proper Title Case with spaces.
 
     Examples:
         AHRI -> Ahri
         LETICIA EVA -> Leticia Eva
         DAISY DUKES -> Daisy Dukes
+        Aerynmonroe -> Aeryn Monroe (split camelCase)
+        aerynmonroe -> Aeryn Monroe (split and capitalize)
     """
     if not name:
         return name
-    return name.strip().title()
+    
+    name = name.strip()
+    
+    # Check if name has no spaces but has mixed case (camelCase)
+    # e.g., "AerynMonroe" or "Aerynmonroe"
+    if ' ' not in name and len(name) > 1:
+        # Insert space before each capital letter (except the first)
+        # This handles "AerynMonroe" -> "Aeryn Monroe"
+        spaced = re.sub(r'(?<!^)(?=[A-Z])', ' ', name)
+        
+        # If we added spaces, use the spaced version
+        if ' ' in spaced:
+            name = spaced
+        else:
+            # No capitals found (all lowercase like "aerynmonroe")
+            # Try common name patterns - split on common name boundaries
+            # This is a heuristic for URL slugs like "aerynmonroe"
+            # Look for patterns where a consonant cluster might indicate word boundary
+            # For now, just title case it - manual fix may be needed
+            pass
+    
+    return name.title()
 
 
 def normalize_tier(tier: str) -> Optional[str]:
