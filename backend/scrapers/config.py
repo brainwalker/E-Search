@@ -60,10 +60,11 @@ SITES = {
         name='SelectCompanyEscorts',
         short_name='SELECT',
         schedule_url='https://www.selectcompanyescorts.com/schedule/',
-        base_url='https://www.selectcompanyescorts.com/',
+        base_url='https://www.selectcompanyescorts.com/toronto-escorts/',
+        image_base_url='https://www.selectcompanyescorts.com/wp-content/uploads/',
         scraper_type=ScraperType.STATIC,
-        rate_limit_seconds=1.0,
-        enabled=False,
+        rate_limit_seconds=1.5,
+        enabled=True,
     ),
 
     'allegra': SiteConfig(

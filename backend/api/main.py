@@ -324,6 +324,8 @@ async def scrape_source(
         "discreet": "discreet",
         "discreetdolls": "discreet",
         "mirage": "mirage",
+        "select": "select",
+        "selectcompany": "select",
     }
 
     source_key = source_map.get(source_name.lower())
@@ -742,9 +744,11 @@ async def debug_listing_extraction(listing_id: int, db: Session = Depends(get_db
         'SFT': 'sft',
         'DD': 'discreet',
         'Mirage': 'mirage',
+        'SELECT': 'select',
         'SexyFriendsToronto': 'sft',  # Legacy support
         'DiscreetDolls': 'discreet',  # Legacy support
         'MirageEntertainment': 'mirage',  # Legacy support
+        'SelectCompanyEscorts': 'select',  # Legacy support
     }
     
     # Try exact match first, then case-insensitive
@@ -889,9 +893,11 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
         'SFT': 'sft',
         'DD': 'discreet',
         'Mirage': 'mirage',
+        'SELECT': 'select',
         'SexyFriendsToronto': 'sft',  # Legacy support
         'DiscreetDolls': 'discreet',  # Legacy support
         'MirageEntertainment': 'mirage',  # Legacy support
+        'SelectCompanyEscorts': 'select',  # Legacy support
     }
     
     # Log for debugging

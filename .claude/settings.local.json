@@ -34,7 +34,9 @@
       "Bash(for url in sunshine kaitlyn kimmy)",
       "Bash(do echo \"=== $url ===\" curl -s \"https://mirage-entertainment.cc/escort/$url/\")",
       "Bash(PYTHONPATH=. python3:*)",
-      "Bash(. .venv/bin/activate)"
+      "Bash(. .venv/bin/activate)",
+      "Bash(git -C /Users/shah/E-Search diff HEAD -- frontend/index.html)",
+      "Bash(git -C /Users/shah/E-Search log --oneline -5)"
     ],
     "deny": [],
     "ask": []

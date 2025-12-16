@@ -17,6 +17,7 @@ from .config import SITES, get_site_config, get_enabled_sites
 from .sites.sft import SFTScraper
 from .sites.dd import DDScraper
 from .sites.mirage import MirageScraper
+from .sites.select import SelectScraper
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +28,8 @@ SCRAPER_REGISTRY: Dict[str, Type[BaseScraper]] = {
     'sft': SFTScraper,
     'discreet': DDScraper,
     'mirage': MirageScraper,
+    'select': SelectScraper,
     # 'secret': SecretScraper,
-    # 'select': SelectScraper,
     # ... add more as implemented
 }
 
