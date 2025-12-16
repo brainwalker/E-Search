@@ -18,6 +18,7 @@ from .sites.sft import SFTScraper
 from .sites.dd import DDScraper
 from .sites.mirage import MirageScraper
 from .sites.select import SelectScraper
+from .sites.secret import SecretScraper
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ SCRAPER_REGISTRY: Dict[str, Type[BaseScraper]] = {
     'discreet': DDScraper,
     'mirage': MirageScraper,
     'select': SelectScraper,
-    # 'secret': SecretScraper,
+    'secret': SecretScraper,
     # ... add more as implemented
 }
 

@@ -149,8 +149,10 @@ def normalize_measurements(measurements_text: str) -> Optional[str]:
 
     measurements = measurements_text.strip()
 
-    # Replace slashes with dashes
+    # Replace slashes and en-dash/em-dash with hyphens
     measurements = measurements.replace('/', '-')
+    measurements = measurements.replace('–', '-')  # en-dash
+    measurements = measurements.replace('—', '-')  # em-dash
 
     # Remove spaces around dashes
     measurements = re.sub(r'\s*-\s*', '-', measurements)
@@ -158,7 +160,7 @@ def normalize_measurements(measurements_text: str) -> Optional[str]:
     # Remove space between bust number and cup
     measurements = re.sub(r'^(\d+)\s+([A-Z]+)', r'\1\2', measurements, flags=re.IGNORECASE)
 
-    # Try to parse as bust-waist-hip format
+    # Try to parse as bust-waist-hip format with cup letter
     match = re.match(r'^(\d+)([A-Z]+)-(\d+)-(\d+)$', measurements, re.IGNORECASE)
     if match:
         bust_num = match.group(1)
@@ -166,6 +168,14 @@ def normalize_measurements(measurements_text: str) -> Optional[str]:
         waist = match.group(3)
         hip = match.group(4)
         return f"{bust_num}{bust_cup}-{waist}-{hip}"
+
+    # Try to parse as bust-waist-hip format WITHOUT cup letter: 35-27-36
+    match_no_cup = re.match(r'^(\d+)-(\d+)-(\d+)$', measurements)
+    if match_no_cup:
+        bust = match_no_cup.group(1)
+        waist = match_no_cup.group(2)
+        hip = match_no_cup.group(3)
+        return f"{bust}-{waist}-{hip}"
 
     # Handle compact format: 34C2636 -> 34C-26-36
     compact_match = re.match(r'^(\d{2})([A-Z]+)[-\s]?(\d{2})(\d{2})$', measurements, re.IGNORECASE)

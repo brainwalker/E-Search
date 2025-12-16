@@ -49,11 +49,12 @@ SITES = {
         name='SecretEscorts',
         short_name='SECRET',
         schedule_url='https://secretescorts.ca/availability/',
-        base_url='https://secretescorts.ca/',
+        base_url='https://secretescorts.ca/model/',
+        image_base_url='https://secretescorts.ca/wp-content/uploads/',
         scraper_type=ScraperType.STATIC,
         requires_age_gate=True,
-        rate_limit_seconds=1.0,
-        enabled=False,  # Not yet implemented
+        rate_limit_seconds=1.5,
+        enabled=True,
     ),
 
     'select': SiteConfig(

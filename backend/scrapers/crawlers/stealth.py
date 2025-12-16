@@ -454,8 +454,11 @@ class StealthCrawler:
                 if attempt < self.max_retries - 1:
                     # Reinitialize browser if context was closed
                     await self._reinit_browser_if_needed()
-                    # Shorter backoff for faster recovery
-                    backoff_time = min(1.5 ** attempt, 3)  # Cap at 3 seconds
+                    # Longer backoff for rate limit errors (403), shorter for others
+                    if '403' in str(e):
+                        backoff_time = 5 + (attempt * 3)  # 5s, 8s, 11s for 403 errors
+                    else:
+                        backoff_time = min(1.5 ** attempt, 3)  # Cap at 3 seconds
                     await asyncio.sleep(backoff_time)
 
         raise last_error or Exception(f"Failed to fetch {url} after {self.max_retries} attempts")

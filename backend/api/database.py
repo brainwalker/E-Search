@@ -148,6 +148,7 @@ class Tier(Base):
     incall_30min = Column(String)  # Price as string (e.g., "$160")
     incall_45min = Column(String)  # Price as string (e.g., "$200")
     incall_1hr = Column(String)  # Price as string (e.g., "$250")
+    incall_90min = Column(String)  # Price as string (e.g., "$600")
     outcall_per_hr = Column(String)  # Price as string (e.g., "$270" or "Unknown")
 
     # Metadata

@@ -245,6 +245,7 @@ class TierRatesResponse(BaseModel):
     incall_30min: Optional[str] = None
     incall_45min: Optional[str] = None
     incall_1hr: Optional[str] = None
+    incall_90min: Optional[str] = None
     outcall_per_hr: Optional[str] = None
     min_booking: Optional[str] = None  # Minimum booking time (for variable pricing)
     source: Optional[str] = None  # "tier" or "listing" - indicates pricing source
@@ -394,6 +395,7 @@ def get_tier_rates_cache(db: Session) -> dict:
             "incall_30min": tier.incall_30min,
             "incall_45min": tier.incall_45min,
             "incall_1hr": tier.incall_1hr,
+            "incall_90min": tier.incall_90min,
             "outcall_per_hr": tier.outcall_per_hr,
         }
 
@@ -745,12 +747,14 @@ async def debug_listing_extraction(listing_id: int, db: Session = Depends(get_db
         'DD': 'discreet',
         'Mirage': 'mirage',
         'SELECT': 'select',
+        'SECRET': 'secret',
         'SexyFriendsToronto': 'sft',  # Legacy support
         'DiscreetDolls': 'discreet',  # Legacy support
         'MirageEntertainment': 'mirage',  # Legacy support
         'SelectCompanyEscorts': 'select',  # Legacy support
+        'SecretEscorts': 'secret',  # Legacy support
     }
-    
+
     # Try exact match first, then case-insensitive
     scraper_key = source_name_to_key.get(source.name)
     if not scraper_key:
@@ -894,12 +898,14 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
         'DD': 'discreet',
         'Mirage': 'mirage',
         'SELECT': 'select',
+        'SECRET': 'secret',
         'SexyFriendsToronto': 'sft',  # Legacy support
         'DiscreetDolls': 'discreet',  # Legacy support
         'MirageEntertainment': 'mirage',  # Legacy support
         'SelectCompanyEscorts': 'select',  # Legacy support
+        'SecretEscorts': 'secret',  # Legacy support
     }
-    
+
     # Log for debugging
     logging.info(f"Refreshing listing {listing_id}: source.name='{source.name}', profile_url='{listing.profile_url}'")
     

@@ -36,7 +36,8 @@
       "Bash(PYTHONPATH=. python3:*)",
       "Bash(. .venv/bin/activate)",
       "Bash(git -C /Users/shah/E-Search diff HEAD -- frontend/index.html)",
-      "Bash(git -C /Users/shah/E-Search log --oneline -5)"
+      "Bash(git -C /Users/shah/E-Search log --oneline -5)",
+      "Bash(pip show:*)"
     ],
     "deny": [],
     "ask": []

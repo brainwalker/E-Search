@@ -217,11 +217,11 @@ class DDScraper(BaseScraper):
         config = get_site_config('discreet')
         super().__init__(config, db_session)
         self.crawler = StealthCrawler(
-            rate_limit=1.5,  # Faster rate limit (was using config which was 3.0)
+            rate_limit=config.rate_limit_seconds,  # Use config value (3.0s) to avoid rate limiting
             headless=True,
             reuse_page=True,  # Reuse browser page for speed
             timeout=20.0,
-            max_retries=2  # Fewer retries to avoid hanging
+            max_retries=3  # More retries for 403 errors
         )
         self._crawler_initialized = False
 
@@ -491,20 +491,24 @@ class DDScraper(BaseScraper):
                 profile['bust'] = normalize_bust_size(bust_match.group(1))
 
             # Figure/Measurements - handle multiple formats:
-            # "Figure: 34H" (bust only)
-            # "Figure: 36C–25–36" (full measurements with en-dash/em-dash)
-            # "Figure: 32D-24-36" (full measurements with hyphen)
+            # "Figure: 34H" (bust only with cup)
+            # "Figure: 36C–25–36" (full measurements with en-dash/em-dash and cup)
+            # "Figure: 32D-24-36" (full measurements with hyphen and cup)
+            # "Figure: 35-27-36" (full measurements without cup letter)
             figure_match = re.search(
-                r'(?:Figure|Measurements?)[:\s]+(\d+[A-Za-z]+(?:\s*[–—\-/]\s*\d+\s*[–—\-/]\s*\d+)?)',
+                r'(?:Figure|Measurements?)[:\s]+(\d+[A-Za-z]*(?:\s*[–—\-/]\s*\d+\s*[–—\-/]\s*\d+)?)',
                 text, re.IGNORECASE
             )
             if figure_match:
                 figure_value = figure_match.group(1).strip()
                 # Check if it's just bust size (e.g., "34H") or full measurements
                 if re.match(r'^\d+[A-Za-z]+$', figure_value):
-                    # Just bust size - extract and set bust if not already found
+                    # Just bust size with cup letter - extract and set bust if not already found
                     if not profile.get('bust'):
                         profile['bust'] = normalize_bust_size(figure_value)
+                elif re.match(r'^\d+$', figure_value):
+                    # Just a number (rare, skip)
+                    pass
                 else:
                     # Full measurements - normalize and set
                     # Replace en-dash/em-dash with hyphen for normalization
@@ -513,9 +517,15 @@ class DDScraper(BaseScraper):
                     profile['measurements'] = measurements
                     # Also extract bust from figure if not already found
                     if not profile.get('bust'):
+                        # Try with cup letter first (e.g., "34DD-26-36")
                         bust_from_fig = re.match(r'(\d+[A-Za-z]+)', measurements)
                         if bust_from_fig:
                             profile['bust'] = normalize_bust_size(bust_from_fig.group(1))
+                        else:
+                            # No cup letter, just use the number (e.g., "35-27-36" -> "35")
+                            bust_num = re.match(r'(\d+)', measurements)
+                            if bust_num:
+                                profile['bust'] = bust_num.group(1)
 
             # Nationality - handle patterns like "Nationality: European" or "Nationality: Spanish & Columbian"
             nat_match = re.search(r'Nationality[:\s]+([A-Za-z\s/&-]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
@@ -527,11 +537,12 @@ class DDScraper(BaseScraper):
 
             # Ethnicity - handle patterns like:
             # "Ethnicity: Caucasian"
+            # "Ethnicity: Middle Eastern"
             # "Ethnicity: Caucasian (Irish, British, German)"
             # "Ethnicity: Caucasian (French/Scottish)"
             # Stop before next field label like "Nationality:"
             eth_match = re.search(
-                r'Ethnicity[:\s]+([A-Za-z]+(?:\s*\([^)]+\))?)',
+                r'Ethnicity[:\s]+(.+?)(?:\s+(?:Nationality|Hair|Eye|Height|Weight|Age|Figure|Bust|Service)[:\s]|$)',
                 text, re.IGNORECASE
             )
             if eth_match:
@@ -559,6 +570,22 @@ class DDScraper(BaseScraper):
                 profile['bust_type'] = 'Natural'
             elif 'enhanced' in text.lower():
                 profile['bust_type'] = 'Enhanced'
+
+        # Extract tier from page - look for tier badges/labels
+        # DD tiers: Doll, Diamond Doll, Platinum Doll, Sapphire Doll
+        page_text = soup.get_text(' ', strip=True).lower()
+        if 'sapphire doll' in page_text or 'sapphire' in page_text:
+            profile['tier'] = 'Sapphire Doll'
+        elif 'platinum doll' in page_text or 'platinum' in page_text:
+            profile['tier'] = 'Platinum Doll'
+        elif 'diamond doll' in page_text or 'diamond' in page_text:
+            profile['tier'] = 'Diamond Doll'
+        elif 'doll' in page_text:
+            # Check for just "Doll" tier (base tier) - but be careful not to match site name
+            # Look for tier-specific elements
+            tier_elem = soup.find(class_=re.compile(r'tier|badge|rank|level', re.IGNORECASE))
+            if tier_elem and 'doll' in tier_elem.get_text(strip=True).lower():
+                profile['tier'] = 'Doll'
 
         # Extract service type from right side div - "Service Details: GFE" or "Service Details:GFE & PSE"
         right_div = soup.find('div', class_='right')

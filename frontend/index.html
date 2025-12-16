@@ -3384,6 +3384,7 @@
                     rates.incall_30min ? { label: '30min', value: removeDollar(rates.incall_30min) } : null,
                     rates.incall_45min ? { label: '45min', value: removeDollar(rates.incall_45min) } : null,
                     rates.incall_1hr ? { label: '1hr', value: removeDollar(rates.incall_1hr) } : null,
+                    rates.incall_90min ? { label: '90min', value: removeDollar(rates.incall_90min) } : null,
                     rates.outcall_per_hr ? { label: 'Outcall/hr', value: removeDollar(rates.outcall_per_hr) } : null
                 ].filter(p => p !== null);
 
@@ -3395,7 +3396,7 @@
                                 ${priceArray.map(p => `
                                     <div class="modal-price-item">
                                         <span class="price-duration">${p.label}</span>
-                                        <span class="price-amount">${p.value}</span>
+                                        <span class="price-amount">🌷${p.value}</span>
                                     </div>
                                 `).join('')}
                             </div>
