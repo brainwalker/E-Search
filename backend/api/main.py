@@ -239,13 +239,15 @@ class SourceResponse(BaseModel):
 
 
 class TierRatesResponse(BaseModel):
-    """Tier rates from the tiers table"""
-    tier: str
-    star: int
-    incall_30min: Optional[str]
-    incall_45min: Optional[str]
-    incall_1hr: Optional[str]
-    outcall_per_hr: Optional[str]
+    """Tier rates from the tiers table or listing-level pricing"""
+    tier: Optional[str] = None  # Optional for listing-level pricing
+    star: Optional[int] = None  # Optional for listing-level pricing
+    incall_30min: Optional[str] = None
+    incall_45min: Optional[str] = None
+    incall_1hr: Optional[str] = None
+    outcall_per_hr: Optional[str] = None
+    min_booking: Optional[str] = None  # Minimum booking time (for variable pricing)
+    source: Optional[str] = None  # "tier" or "listing" - indicates pricing source
 
     class Config:
         from_attributes = True
@@ -321,6 +323,9 @@ async def scrape_source(
         "dd": "discreet",
         "discreet": "discreet",
         "discreetdolls": "discreet",
+        "mirage": "mirage",
+        "select": "select",
+        "selectcompany": "select",
     }
 
     source_key = source_map.get(source_name.lower())
@@ -407,7 +412,7 @@ def invalidate_tier_cache():
 
 
 def enrich_listing_with_tier_rates(listing: Listing, tier_cache: dict) -> dict:
-    """Convert listing to dict with tier rates from cache"""
+    """Convert listing to dict with tier rates from cache or listing-level pricing"""
     # Build the base response
     result = {
         "id": listing.id,
@@ -436,13 +441,43 @@ def enrich_listing_with_tier_rates(listing: Listing, tier_cache: dict) -> dict:
         "tags": listing.tags,
         "source": listing.source,
     }
-    
-    # Lookup tier rates if tier exists
-    if listing.tier and listing.source_id:
+
+    # Check for listing-level pricing first (for sources with variable pricing)
+    has_listing_prices = any([
+        listing.incall_30min,
+        listing.incall_45min,
+        listing.incall_1hr,
+        listing.outcall_1hr
+    ])
+
+    if has_listing_prices:
+        # Use listing-level pricing
+        # Still populate tier and star from listing/tier_cache for display purposes
+        tier_name = listing.tier
+        star_count = None
+        if listing.tier and listing.source_id:
+            key = (listing.source_id, listing.tier.upper())
+            if key in tier_cache:
+                star_count = tier_cache[key].get("star")
+
+        result["tier_rates"] = {
+            "tier": tier_name,  # Use tier from listing
+            "star": star_count,  # Lookup star from tier table
+            "incall_30min": listing.incall_30min,
+            "incall_45min": listing.incall_45min,
+            "incall_1hr": listing.incall_1hr,
+            "outcall_per_hr": listing.outcall_1hr,
+            "min_booking": listing.min_booking,
+            "source": "listing"  # Indicate pricing came from listing
+        }
+    elif listing.tier and listing.source_id:
+        # Fall back to tier-based pricing
         key = (listing.source_id, listing.tier.upper())
         if key in tier_cache:
-            result["tier_rates"] = tier_cache[key]
-    
+            tier_rates = tier_cache[key].copy()
+            tier_rates["source"] = "tier"  # Indicate pricing came from tier table
+            result["tier_rates"] = tier_rates
+
     return result
 
 
@@ -708,8 +743,12 @@ async def debug_listing_extraction(listing_id: int, db: Session = Depends(get_db
     source_name_to_key = {
         'SFT': 'sft',
         'DD': 'discreet',
+        'Mirage': 'mirage',
+        'SELECT': 'select',
         'SexyFriendsToronto': 'sft',  # Legacy support
         'DiscreetDolls': 'discreet',  # Legacy support
+        'MirageEntertainment': 'mirage',  # Legacy support
+        'SelectCompanyEscorts': 'select',  # Legacy support
     }
     
     # Try exact match first, then case-insensitive
@@ -738,11 +777,16 @@ async def debug_listing_extraction(listing_id: int, db: Session = Depends(get_db
     if not scraper:
         raise HTTPException(status_code=500, detail=f"Failed to initialize scraper for {source.name}")
     
+    # Build full profile URL from source base_url + listing profile_url slug
+    full_profile_url = f"{source.base_url}{listing.profile_url}" if source.base_url else listing.profile_url
+    
     try:
         # Check if scraper has scrape_profile_with_debug method (legacy SFT scraper)
         if hasattr(scraper, 'scrape_profile_with_debug'):
             # Use debug method if available (legacy scraper)
             debug_result = await scraper.scrape_profile_with_debug(listing.profile_url)
+            # Override profile_url with full URL
+            debug_result['profile_url'] = full_profile_url
         else:
             # For new scrapers, use scrape_profile and format as debug result
             profile_data = await scraper.scrape_profile(listing.profile_url)
@@ -783,7 +827,7 @@ async def debug_listing_extraction(listing_id: int, db: Session = Depends(get_db
             }
 
             debug_result = {
-                'profile_url': listing.profile_url,
+                'profile_url': full_profile_url,
                 'profile_data': profile_data,
                 'extractions': extractions,
                 'text_snippets': text_snippets,
@@ -848,8 +892,12 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
     source_name_to_key = {
         'SFT': 'sft',
         'DD': 'discreet',
+        'Mirage': 'mirage',
+        'SELECT': 'select',
         'SexyFriendsToronto': 'sft',  # Legacy support
         'DiscreetDolls': 'discreet',  # Legacy support
+        'MirageEntertainment': 'mirage',  # Legacy support
+        'SelectCompanyEscorts': 'select',  # Legacy support
     }
     
     # Log for debugging
@@ -926,37 +974,24 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
                     logging.debug(f"  Updated {field}: {old_value} -> {new_value}")
         
         # Update schedules if available in profile_data
+        # Note: For refresh, we UPDATE existing schedules by day_of_week only (not location)
+        # This prevents creating duplicates. We don't create NEW schedules on refresh.
         schedules_updated = 0
-        logging.info(f"Checking for schedules in profile_data: {'schedules' in profile_data}")
-        if 'schedules' in profile_data:
-            logging.info(f"Found schedules in profile_data: {len(profile_data.get('schedules', []))} schedule(s)")
         if 'schedules' in profile_data and profile_data['schedules']:
-            
+            logging.info(f"Found {len(profile_data['schedules'])} schedule(s) in profile_data")
+
             for schedule_data in profile_data['schedules']:
-                # Match location
-                location_str = schedule_data.get('location', 'Unknown')
-                location = db.query(Location).filter(
-                    Location.source_id == source.id,
-                    Location.town.ilike(f"%{location_str.split(',')[0] if ',' in location_str else location_str}%")
-                ).first()
-
-                if not location:
-                    # Use default location
-                    location = db.query(Location).filter(
-                        Location.source_id == source.id,
-                        Location.is_default == True
-                    ).first()
-
-                location_id = location.id if location else None
                 day_of_week = schedule_data.get('day_of_week')
-                
-                # Calculate date from day of week (same logic as base scraper)
+                if not day_of_week:
+                    continue
+
+                # Calculate date from day of week
                 today = datetime.now()
                 day_map = {
                     'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3,
                     'Friday': 4, 'Saturday': 5, 'Sunday': 6
                 }
-                target_day = day_map.get(day_of_week) if day_of_week else None
+                target_day = day_map.get(day_of_week)
                 schedule_date = None
                 if target_day is not None:
                     current_day = today.weekday()
@@ -965,40 +1000,37 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
                         days_ahead += 7
                     schedule_date = (today + timedelta(days=days_ahead)).replace(hour=0, minute=0, second=0, microsecond=0)
 
-                # Check for existing schedule
+                # Find existing schedule by day only (not location) to avoid duplicates
                 existing_schedule = db.query(Schedule).filter_by(
                     listing_id=listing.id,
-                    day_of_week=day_of_week,
-                    location_id=location_id
+                    day_of_week=day_of_week
                 ).first()
 
                 if existing_schedule:
+                    # Update existing schedule's times and date
                     existing_schedule.date = schedule_date
                     existing_schedule.start_time = schedule_data.get('start_time')
                     existing_schedule.end_time = schedule_data.get('end_time')
                     existing_schedule.is_expired = False
                     schedules_updated += 1
-                else:
-                    new_schedule = Schedule(
-                        listing_id=listing.id,
-                        day_of_week=day_of_week,
-                        date=schedule_date,
-                        location_id=location_id,
-                        start_time=schedule_data.get('start_time'),
-                        end_time=schedule_data.get('end_time'),
-                    )
-                    db.add(new_schedule)
-                    schedules_updated += 1
-            
+                # Don't create new schedules on refresh - only update existing ones
+                # New schedules should only be created during full scrape
+
             if schedules_updated > 0:
                 logging.info(f"✅ Updated {schedules_updated} schedule(s) for listing {listing_id}")
 
         listing.updated_at = datetime.now()
         db.commit()
-        db.refresh(listing)
-        
+
         logging.info(f"✅ Updated {updated_count} fields for listing {listing_id}")
-        
+
+        # Re-fetch listing with eager loading for relationships
+        listing = db.query(Listing).options(
+            joinedload(Listing.schedules).joinedload(Schedule.location),
+            joinedload(Listing.tags),
+            joinedload(Listing.source)
+        ).filter(Listing.id == listing_id).first()
+
         # Return the updated listing with tier rates
         tier_cache = get_tier_rates_cache(db)
         result = enrich_listing_with_tier_rates(listing, tier_cache)

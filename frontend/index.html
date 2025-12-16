@@ -843,8 +843,8 @@
         /* Listings Grid */
         .listings-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 16px;
         }
 
         .listing-card {
@@ -872,8 +872,9 @@
         }
 
         .listing-card > .listing-body {
+            border-radius: 0 0 var(--radius-lg) var(--radius-lg);
             flex: 1;
-            overflow: visible;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
         }
@@ -920,51 +921,125 @@
 
         .listing-actions {
             position: absolute;
-            top: 10px;
-            right: 10px;
+            top: -12px;
+            right: -12px;
             display: flex;
             gap: 6px;
             z-index: 10;
         }
 
         .listing-action-btn {
-            width: 32px;
-            height: 32px;
+            width: 42px;
+            height: 42px;
             border: none;
-            border-radius: 6px;
+            border-radius: 50%;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
-            transition: all 0.2s ease;
-            backdrop-filter: blur(10px);
+            font-size: 18px;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
             padding: 0;
+            opacity: 0;
+            transform: scale(0.6) rotate(-90deg);
+            position: relative;
+        }
+
+        .listing-card:hover .listing-action-btn {
+            opacity: 1;
+            transform: scale(1) rotate(0deg);
         }
 
         .listing-action-btn.refresh {
-            background: rgba(16, 185, 129, 0.9);
+            background: transparent;
+            color: rgba(255, 255, 255, 0.85);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .listing-action-btn.refresh:hover {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-color: transparent;
             color: white;
+            transform: scale(1.1) rotate(0deg) !important;
+            box-shadow:
+                0 8px 25px rgba(16, 185, 129, 0.4),
+                0 0 0 4px rgba(16, 185, 129, 0.15);
+        }
+
+        .listing-action-btn.refresh:active {
+            transform: scale(0.95) rotate(0deg) !important;
         }
 
         .listing-action-btn.delete {
-            background: rgba(239, 68, 68, 0.9);
-            color: white;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.85);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
         }
 
-        .listing-action-btn:hover {
-            transform: scale(1.1);
+        .listing-action-btn.delete:hover {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            border-color: transparent;
+            color: white;
+            transform: scale(1.1) rotate(0deg) !important;
+            box-shadow:
+                0 8px 25px rgba(239, 68, 68, 0.4),
+                0 0 0 4px rgba(239, 68, 68, 0.15);
+        }
+
+        .refresh-icon {
+            display: inline-block;
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .listing-action-btn.refresh:hover .refresh-icon {
+            transform: rotate(180deg);
+        }
+
+        /* Spinning animation for refresh */
+        @keyframes spin-refresh {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .listing-action-btn.refresh.refreshing {
+            opacity: 1 !important;
+            transform: scale(1) rotate(0deg) !important;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-color: transparent;
+            pointer-events: none;
+            box-shadow:
+                0 4px 15px rgba(16, 185, 129, 0.3),
+                0 0 0 3px rgba(16, 185, 129, 0.1);
+        }
+
+        .listing-action-btn.refresh.refreshing .refresh-icon {
+            animation: spin-refresh 0.7s linear infinite;
         }
 
         .listing-header {
-            padding: 16px;
+            padding: 14px;
             background: var(--accent-gradient);
         }
 
         .listing-name {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: 700;
             color: white;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .listing-tier-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 6px;
+            gap: 8px;
         }
 
         .listing-tier {
@@ -974,19 +1049,23 @@
             padding: 3px 8px;
             background: rgba(255, 255, 255, 0.15);
             border-radius: 12px;
-            margin-top: 6px;
+        }
+
+        .listing-rating {
+            font-size: 0.85rem;
         }
 
         .listing-body {
-            padding: 16px;
+            padding: 14px;
         }
 
         .listing-thumbnail {
             width: 100%;
-            height: 180px;
-            object-fit: cover;
+            height: 220px;
+            object-fit: contain;
+            object-position: center top;
             border-radius: 8px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             background: var(--bg-tertiary);
         }
 
@@ -1007,7 +1086,12 @@
             font-size: 0.85rem;
         }
 
-        .listing-detail:last-of-type {
+        .listing-detail:last-child {
+            border-bottom: none;
+        }
+        
+        /* Remove border when followed by schedule-wrapper (which has its own border-top) */
+        .listing-detail:has(+ .schedule-wrapper) {
             border-bottom: none;
         }
 
@@ -1018,6 +1102,11 @@
         .detail-value {
             color: var(--text-primary);
             font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 60%;
+            text-align: right;
         }
 
         .rates-section {
@@ -1064,17 +1153,39 @@
             letter-spacing: 0.5px;
         }
 
+        .schedule-wrapper {
+            margin-top: 8px;
+            padding-top: 0;
+        }
+
         .schedule-section {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 0;
+        }
+
+        .schedule-title {
+            font-size: 0.72rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .schedule-title.today {
+            color: #4ade80;
+        }
+
+        .schedule-title.future {
+            color: var(--accent-primary);
         }
 
         .schedule-item {
             background: var(--bg-tertiary);
             padding: 8px 10px;
             border-radius: 6px;
-            margin-bottom: 3px;
+            margin-bottom: 6px;
             border: 1px solid var(--border-color);
             font-size: 0.8rem;
             transition: all 0.15s ease;
@@ -1087,8 +1198,6 @@
         .schedule-item:hover {
             background: var(--bg-card);
             border-color: var(--accent-primary);
-            transform: translateX(2px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
 
         /* Today's schedule (green accent) */
@@ -1103,11 +1212,6 @@
             border-color: #4ade80;
         }
 
-        .schedule-item.today .schedule-title,
-        .schedule-title.today {
-            color: #4ade80;
-        }
-
         /* Future schedule (purple/blue accent) */
         .schedule-item.future {
             background: rgba(99, 102, 241, 0.06);
@@ -1118,11 +1222,6 @@
         .schedule-item.future:hover {
             background: rgba(99, 102, 241, 0.12);
             border-color: var(--accent-primary);
-        }
-
-        .schedule-item.future .schedule-title,
-        .schedule-title.future {
-            color: var(--accent-primary);
         }
 
         .schedule-day {
@@ -1137,29 +1236,22 @@
 
         .schedule-location-row {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            color: var(--text-secondary);
-            font-size: 0.8rem;
-        }
-
-        .schedule-location {
-            color: var(--text-muted);
-            font-size: 0.7rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            flex: 1;
-            text-align: right;
+            flex-direction: column;
+            gap: 2px;
         }
 
         .schedule-times {
             color: var(--text-primary);
             font-weight: 600;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
+        }
+
+        .schedule-location {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
             white-space: nowrap;
-            letter-spacing: 0.3px;
         }
 
         /* Expired/past time slot styling */
@@ -2256,19 +2348,19 @@
 
         // Check if a day is in the past (for this week)
         function isDayPast(dayName) {
-            const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-            const today = getCurrentDayOfWeek();
+            const dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+            const today = getCurrentDayOfWeek().toLowerCase();
             const todayIndex = dayOrder.indexOf(today);
-            const dayIndex = dayOrder.indexOf(dayName);
-            return dayIndex < todayIndex;
+            const dayIndex = dayOrder.indexOf(dayName?.toLowerCase());
+            return dayIndex >= 0 && dayIndex < todayIndex;
         }
 
         // Get date for a day of the week (returns Date object)
         function getDateForDay(dayName) {
-            const dayOrder = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const dayOrder = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
             const today = new Date();
             const todayDayIndex = today.getDay();
-            const targetDayIndex = dayOrder.indexOf(dayName);
+            const targetDayIndex = dayOrder.indexOf(dayName?.toLowerCase());
 
             let daysToAdd = targetDayIndex - todayDayIndex;
             if (daysToAdd < 0) {
@@ -2795,7 +2887,8 @@
                 // Update stats based on filtered results
                 const today = getCurrentDayOfWeek();
                 const activeCount = listings.filter(l => {
-                    const todaySched = l.schedules?.find(s => s.day_of_week === today);
+                    const todayLower = today.toLowerCase();
+                    const todaySched = l.schedules?.find(s => s.day_of_week?.toLowerCase() === todayLower);
                     if (!todaySched) return false;
                     if (!todaySched.end_time) return true;
                     return !isTimePast(todaySched.end_time, todaySched.start_time);
@@ -2887,8 +2980,8 @@
         // Get today's schedule for a listing
         function getTodaySchedule(listing) {
             if (!listing.schedules || listing.schedules.length === 0) return null;
-            const today = getCurrentDayOfWeek();
-            return listing.schedules.find(s => s.day_of_week === today);
+            const today = getCurrentDayOfWeek().toLowerCase();
+            return listing.schedules.find(s => s.day_of_week?.toLowerCase() === today);
         }
 
         // Get next available schedule after today
@@ -2902,8 +2995,8 @@
             // Find the next schedule (looking forward from today)
             for (let i = 1; i < 7; i++) {
                 const nextDayIndex = (todayIndex + i) % 7;
-                const nextDay = dayOrder[nextDayIndex];
-                const schedule = listing.schedules.find(s => s.day_of_week === nextDay);
+                const nextDay = dayOrder[nextDayIndex].toLowerCase();
+                const schedule = listing.schedules.find(s => s.day_of_week?.toLowerCase() === nextDay);
                 if (schedule) {
                     return schedule;
                 }
@@ -2946,16 +3039,17 @@
             const createScheduleItem = (dayOfWeek, startTime, endTime, town, dateStr) => {
                 const isToday = dayOfWeek === todayName;
                 const timeRange = startTime && endTime ? `${startTime} - ${endTime}` : (startTime || 'Available');
-                const dayLabel = isToday ? `Today (${dateStr})` : `${dayOfWeek} (${dateStr})`;
+                const dayLabel = isToday ? `Today` : dayOfWeek;
                 const itemClass = isToday ? 'today' : 'future';
+                const locationText = town || 'Location TBD';
 
                 return {
-                    title: `<div class="schedule-title ${itemClass}">📅 ${dayLabel}</div>`,
+                    title: `<div class="schedule-title ${itemClass}">${dayLabel} · ${dateStr}</div>`,
                     content: `
                         <div class="schedule-item ${itemClass}">
                             <div class="schedule-location-row">
-                                <span class="schedule-times">${timeRange}</span>
-                                <span class="schedule-location">📍 ${town || 'Available'}</span>
+                                <span class="schedule-times">🕐 ${timeRange}</span>
+                                <span class="schedule-location">📍 ${locationText}</span>
                             </div>
                         </div>
                     `
@@ -2967,10 +3061,12 @@
             if (selectedDays.length > 0 && listing.schedules && listing.schedules.length > 0) {
                 // Filter schedules to only show selected days, and exclude expired today's schedule
                 const filteredSchedules = listing.schedules.filter(s => {
-                    if (!selectedDays.includes(s.day_of_week)) return false;
+                    const scheduleDay = s.day_of_week?.toLowerCase();
+                    const matchesSelectedDay = selectedDays.some(d => d.toLowerCase() === scheduleDay);
+                    if (!matchesSelectedDay) return false;
 
                     // If it's today's schedule, check if it's expired
-                    if (s.day_of_week === todayName) {
+                    if (scheduleDay === todayName.toLowerCase()) {
                         const scheduleExpired = s.end_time && isTimePast(s.end_time, s.start_time);
                         return !scheduleExpired; // Only include if not expired
                     }
@@ -2986,12 +3082,12 @@
                         const dateStr = formatShortDate(date);
                         return createScheduleItem(schedule.day_of_week, schedule.start_time, schedule.end_time, town, dateStr);
                     });
-                    schedulesHtml = scheduleItems.map(item => `
+                    schedulesHtml = `<div class="schedule-wrapper">` + scheduleItems.map(item => `
                         ${item.title}
                         <div class="schedule-section">
                             ${item.content}
                         </div>
-                    `).join('');
+                    `).join('') + `</div>`;
                 } else {
                     // No valid schedules for selected days, show next available schedule
                     const nextSchedule = getNextSchedule(listing);
@@ -3002,14 +3098,18 @@
                         const item = createScheduleItem(nextSchedule.day_of_week, nextSchedule.start_time, nextSchedule.end_time, town, nextDateStr);
 
                         schedulesHtml = `
-                            ${item.title}
-                            <div class="schedule-section">
-                                ${item.content}
+                            <div class="schedule-wrapper">
+                                ${item.title}
+                                <div class="schedule-section">
+                                    ${item.content}
+                                </div>
                             </div>
                         `;
                     } else {
                         schedulesHtml = `
-                            <div class="schedule-title" style="color: var(--text-muted); font-style: italic;">No schedule available</div>
+                            <div class="schedule-wrapper">
+                                <div class="schedule-title" style="color: var(--text-muted); font-style: italic;">No schedule available</div>
+                            </div>
                         `;
                     }
                 }
@@ -3021,9 +3121,11 @@
                 const item = createScheduleItem(todayName, todaySchedule.start_time, todaySchedule.end_time, town, todayDateStr);
 
                 schedulesHtml = `
-                    ${item.title}
-                    <div class="schedule-section">
-                        ${item.content}
+                    <div class="schedule-wrapper">
+                        ${item.title}
+                        <div class="schedule-section">
+                            ${item.content}
+                        </div>
                     </div>
                 `;
             } else {
@@ -3036,15 +3138,19 @@
                     const item = createScheduleItem(nextSchedule.day_of_week, nextSchedule.start_time, nextSchedule.end_time, town, nextDateStr);
 
                     schedulesHtml = `
-                        ${item.title}
-                        <div class="schedule-section">
-                            ${item.content}
+                        <div class="schedule-wrapper">
+                            ${item.title}
+                            <div class="schedule-section">
+                                ${item.content}
+                            </div>
                         </div>
                     `;
                 } else {
                     // No schedules available at all
                     schedulesHtml = `
-                        <div class="schedule-title" style="color: var(--text-muted); font-style: italic;">No schedule available</div>
+                        <div class="schedule-wrapper">
+                            <div class="schedule-title" style="color: var(--text-muted); font-style: italic;">No schedule available</div>
+                        </div>
                     `;
                 }
             }
@@ -3052,11 +3158,14 @@
             card.innerHTML = `
                 <div class="listing-header">
                     <div class="listing-actions">
-                        <button class="listing-action-btn refresh" onclick="event.stopPropagation(); refreshListing(${listing.id})" title="Refresh">🔄</button>
+                        <button class="listing-action-btn refresh" data-listing-id="${listing.id}" onclick="event.stopPropagation(); refreshListing(${listing.id}, this)" title="Refresh"><span class="refresh-icon">🔄</span></button>
                     </div>
                     <div class="listing-name">${listing.name}</div>
-                    ${tierName ? `<span class="listing-tier">${tierName}</span>` : ''}
-                    ${ratingDisplay ? `<div style="margin-top: 4px; font-size: 0.9rem;">${ratingDisplay}</div>` : ''}
+                    ${tierName || ratingDisplay ? `
+                    <div class="listing-tier-row">
+                        ${tierName ? `<span class="listing-tier">${tierName}</span>` : '<span></span>'}
+                        ${ratingDisplay ? `<span class="listing-rating">${ratingDisplay}</span>` : ''}
+                    </div>` : ''}
                 </div>
                 <div class="listing-body">
                     ${imageHtml}
@@ -3173,9 +3282,13 @@
             loadListings();
         }
 
-        async function refreshListing(listingId) {
+        async function refreshListing(listingId, btnElement) {
+            // Add spinning animation
+            if (btnElement) {
+                btnElement.classList.add('refreshing');
+            }
+
             try {
-                showNotification('Refreshing...', 'info');
                 console.log(`🔄 Refreshing listing ${listingId}...`);
                 const response = await fetch(`${API_BASE}/api/listings/${listingId}/refresh`, {
                     method: 'POST'
@@ -3209,6 +3322,10 @@
             } catch (error) {
                 console.error('❌ Refresh error:', error);
                 showNotification(error.message || 'Failed to refresh.', 'error');
+                // Remove spinning on error
+                if (btnElement) {
+                    btnElement.classList.remove('refreshing');
+                }
             }
         }
 
@@ -3346,9 +3463,11 @@
             // Build details grid (two columns for compact layout)
             const detailsArray = [
                 listing.age ? { label: 'Age', value: listing.age } : null,
+                listing.ethnicity ? { label: 'Ethnicity', value: listing.ethnicity } : null,
                 listing.nationality ? { label: 'Nationality', value: listing.nationality } : null,
                 listing.height ? { label: 'Height', value: listing.height } : null,
                 listing.weight ? { label: 'Weight', value: listing.weight } : null,
+                listing.measurements ? { label: 'Measurements', value: listing.measurements } : null,
                 listing.bust ? { label: 'Bust', value: `${listing.bust}${listing.bust_type ? ` (${listing.bust_type})` : ''}` } : null,
                 listing.hair_color ? { label: 'Hair', value: listing.hair_color } : null,
                 listing.eye_color ? { label: 'Eyes', value: listing.eye_color } : null,

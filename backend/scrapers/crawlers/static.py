@@ -45,6 +45,7 @@ class StaticCrawler:
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',  # Support brotli compression
         }
         self._last_request_time = 0
         # Reusable HTTP client with connection pooling
@@ -108,7 +109,16 @@ class StaticCrawler:
             try:
                 # Set cookies for this request if provided
                 response = await client.get(url, cookies=cookies)
-                response.raise_for_status()
+
+                # Some sites return 500 but still have valid content
+                # Only raise for status if response is empty or clearly an error page
+                if response.status_code >= 400:
+                    # Check if response has substantial content (likely valid despite status)
+                    if len(response.text) > 1000 and '<html' in response.text.lower():
+                        logger.warning(f"Got status {response.status_code} but response has content, proceeding")
+                        return response.text
+                    response.raise_for_status()
+
                 return response.text
 
             except httpx.HTTPError as e:

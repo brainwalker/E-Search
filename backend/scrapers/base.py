@@ -118,6 +118,13 @@ class ScrapedListing:
     eye_color: Optional[str] = None
     service_type: Optional[str] = None
 
+    # Per-listing pricing (for sources with variable pricing like Mirage PLATINUM VIP)
+    incall_30min: Optional[str] = None
+    incall_45min: Optional[str] = None
+    incall_1hr: Optional[str] = None
+    outcall_1hr: Optional[str] = None
+    min_booking: Optional[str] = None
+
     # Media and tags
     images: List[str] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
@@ -421,8 +428,12 @@ class BaseScraper(ABC):
             'end_time': item.end_time,
         } for item in all_schedule_items]
 
+        # Prefer name from profile_data if available (might have proper spacing)
+        # Fall back to schedule_item.name
+        name = profile_data.get('name') or schedule_item.name
+        
         return ScrapedListing(
-            name=schedule_item.name,
+            name=name,
             profile_url=schedule_item.profile_url,
             source=self.config.short_name,
             tier=tier,
@@ -524,6 +535,13 @@ class BaseScraper(ABC):
         db_listing.images = json.dumps(listing.images) if listing.images else None
         db_listing.is_active = True
         db_listing.is_expired = False
+
+        # Per-listing pricing (for sources with variable pricing)
+        db_listing.incall_30min = listing.incall_30min
+        db_listing.incall_45min = listing.incall_45min
+        db_listing.incall_1hr = listing.incall_1hr
+        db_listing.outcall_1hr = listing.outcall_1hr
+        db_listing.min_booking = listing.min_booking
 
         self.db.flush()
 

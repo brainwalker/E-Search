@@ -100,6 +100,7 @@ async def get_table_data(
         columns_order = """id, name, tier, age, nationality, ethnicity,
                           bust, measurements, height, weight,
                           eye_color, hair_color, service_type, bust_type,
+                          incall_30min, incall_45min, incall_1hr, outcall_1hr, min_booking,
                           profile_url, source_id, images,
                           is_active, is_expired, created_at, updated_at"""
         data_query = text(f"SELECT {columns_order} FROM {table_name} {where_clause} LIMIT :limit OFFSET :offset")
@@ -374,16 +375,19 @@ async def restart_backend():
 
         await asyncio.sleep(0.5)
 
-        # Start new uvicorn process
-        venv_python = backend_dir / ".venv" / "bin" / "python"
-        if not venv_python.exists():
-            venv_python = sys.executable
-
+        # Start new uvicorn process using nohup to ensure it survives
+        python_executable = sys.executable
+        logging.info(f"Starting new process with: {python_executable}")
+        logging.info(f"Working directory: {backend_dir}")
+        
+        # Use nohup and redirect output to log file
+        log_file = backend_dir / "data" / "restart_output.log"
+        cmd = f'nohup {python_executable} -m uvicorn api.main:app --reload --host 0.0.0.0 --port 8000 > "{log_file}" 2>&1 &'
+        
         subprocess.Popen(
-            [str(venv_python), "-m", "uvicorn", "api.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"],
+            cmd,
+            shell=True,
             cwd=str(backend_dir),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
             start_new_session=True
         )
 
