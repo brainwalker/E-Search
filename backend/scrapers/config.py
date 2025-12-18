@@ -126,10 +126,11 @@ SITES = {
         name='TopDrawerLadies',
         short_name='TDL',
         schedule_url='https://www.topdrawerladies.com/pages/schedule',
-        base_url='https://www.topdrawerladies.com/',
-        scraper_type=ScraperType.JAVASCRIPT,
+        base_url='https://www.topdrawerladies.com/collections/all/products/',
+        image_base_url='https://d2wvwvig0d1mx7.cloudfront.net/',
+        scraper_type=ScraperType.STATIC,  # Content is server-rendered, no JS needed
         rate_limit_seconds=2.0,
-        enabled=False,
+        enabled=True,
     ),
 
     'hotpink': SiteConfig(

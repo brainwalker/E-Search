@@ -233,6 +233,36 @@ INSERT INTO sources (name, short_name, base_url, is_active, created_at, updated_
 VALUES ('Your Site Name', 'YSN', 'https://yoursite.com', 1, datetime('now'), datetime('now'));
 ```
 
+## Step 6: Add to API Source Map
+
+In `backend/api/main.py`, add mappings to `source_map`:
+
+```python
+source_map = {
+    # ... existing mappings ...
+    "yoursite": "yoursite",
+    "ysn": "yoursite",  # short name alias
+}
+```
+
+## Step 7: Add Default Location
+
+Every source needs a default location for fallback. Run:
+
+```sql
+-- Get your source ID first
+SELECT id FROM sources WHERE name = 'YSN';
+
+-- Add default location (replace 7 with your source ID)
+INSERT INTO locations (source_id, town, location, is_default)
+VALUES (7, 'Unknown', 'Unknown', 1);
+
+-- Add specific locations your site uses
+INSERT INTO locations (source_id, town, location, is_default) VALUES
+    (7, 'Downtown', 'Main Location', 0),
+    (7, 'North York', 'North York', 0);
+```
+
 ## That's It!
 
 Your scraper now has:
@@ -372,15 +402,35 @@ No frontend changes needed for basic functionality.
 
 ### Use Normalizers
 Always use the built-in normalizers for consistent data:
-- `normalize_name()` - Clean names
-- `normalize_height()` - Convert to consistent format
-- `normalize_weight()` - Handle lbs/kg
-- `normalize_bust_size()` - Standardize cup sizes
+- `normalize_name()` - Clean names (handles "S O F I A" → "Sofia", camelCase, etc.)
+- `normalize_height()` - Convert to consistent format (5'9", 170cm)
+- `normalize_weight()` - Handle lbs/kg conversion
+- `normalize_bust_size()` - Standardize cup sizes ("34DD" → "34 DD")
 - `normalize_measurements()` - Format as "34C-24-36"
 
+### Clean Up Names from Profile Pages
+Profile pages often have messy names. Clean them up:
+```python
+# Remove site name suffixes
+name = re.sub(r'\s*[-,]\s*Site Name.*$', '', name, flags=re.IGNORECASE)
+name = re.sub(r'\s*At\s+Site Name.*$', '', name, flags=re.IGNORECASE)
+# Remove common prefixes
+name = re.sub(r'^Elite\s+Companion\s*', '', name, flags=re.IGNORECASE)
+```
+
 ### Choose the Right Crawler
-- **StaticCrawler**: Fast, for simple HTML sites
-- **StealthCrawler**: For sites with anti-bot protection or JavaScript
+- **StaticCrawler**: Fast, for simple HTML sites (most sites work with this)
+- **StealthCrawler/CrawleeStealth**: For sites with anti-bot protection or heavy JavaScript
+- **Note**: Many "JavaScript" sites actually serve HTML that works with StaticCrawler. Test first!
+
+### Analyzing a New Site
+Before writing a scraper:
+1. **Check schedule page** - How is schedule data encoded? (CSS classes, data attributes, JSON)
+2. **Check profile page** - What stats are available? What are the exact field names?
+3. **Decide approach**:
+   - **DOM-based**: Parse structured HTML elements (like DD scraper)
+   - **Regex-based**: Extract from text patterns (like SFT scraper)
+   - **CSS class parsing**: Data encoded in classes (like TDL scraper)
 
 ### Debug Logging
 Add debug logs where helpful:
@@ -409,6 +459,64 @@ tail -f /tmp/esearch-backend.log
 
 # Check database
 sqlite3 backend/data/escort_listings.db "SELECT * FROM listings WHERE source_id = (SELECT id FROM sources WHERE short_name = 'YSN');"
+
+# Check schedules have locations
+sqlite3 data/escort_listings.db "SELECT l.name, s.day_of_week, loc.town, loc.location FROM schedules s JOIN listings l ON s.listing_id = l.id JOIN locations loc ON s.location_id = loc.id WHERE l.source_id = 7 LIMIT 10"
+```
+
+## Common Pitfalls
+
+### 1. "Location not found" Error
+Every source needs a default location with `is_default=1`. If you see this error, add:
+```sql
+INSERT INTO locations (source_id, town, location, is_default) VALUES (YOUR_SOURCE_ID, 'Unknown', 'Unknown', 1);
+```
+
+### 2. Scraper Not Found After Adding
+**Server must be restarted** to pick up new scrapers. Kill and restart uvicorn.
+
+### 3. Greedy Regex Capturing Wrong Values
+When parsing text like "Hair Color: Brunette Body Size: 34C", a greedy regex might capture "Brunette Body". Solutions:
+- Use non-greedy quantifiers: `([A-Za-z]+?)`
+- Filter invalid values: `if hair.lower() not in ('body', 'size')`
+- Return early with specific patterns
+
+### 4. Protocol-Relative URLs
+Image URLs like `//cdn.example.com/img.jpg` need protocol added:
+```python
+if url.startswith('//'):
+    url = 'https:' + url
+```
+
+### 5. Name Cleanup
+Profile page titles often include site name. Always clean:
+```python
+name = re.sub(r'\s*[-–|]\s*Site Name.*$', '', name, flags=re.IGNORECASE)
+```
+
+### 6. base_url Should Be the Profile Page Base
+`base_url` is used to construct profile page URLs, **not** the site root. If profiles are at:
+- `https://example.com/escorts/jane` → `base_url = 'https://example.com/escorts/'`
+- `https://example.com/collections/all/products/jane` → `base_url = 'https://example.com/collections/all/products/'`
+
+Then in your scraper, simply: `full_url = f"{self.config.base_url}{profile_slug}"`
+
+### 7. Tier Information in URL Slugs
+Some sites encode tier in the URL slug (e.g., `disha-vip`, `eliza-ultra-vip`). Check slugs before page content:
+```python
+slug_lower = profile_slug.lower()
+if 'ultra-vip' in slug_lower:
+    profile['tier'] = 'Ultra VIP'
+elif '-vip' in slug_lower:
+    profile['tier'] = 'VIP'
+```
+
+### 8. Don't Forget to Add Tiers
+If the site has pricing tiers, add them to the `tiers` table:
+```sql
+INSERT INTO tiers (source_id, tier, star, incall_30min, incall_1hr, outcall_per_hr, created_at) VALUES
+    (YOUR_SOURCE_ID, 'Normal', 1, '$160', '$260', '$300', datetime('now')),
+    (YOUR_SOURCE_ID, 'VIP', 2, '$200', '$300', '$350', datetime('now'));
 ```
 
 ## Need Help?

@@ -14,6 +14,8 @@ from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 import logging
 
+from ..base import is_cancelled, ScrapeCancelledException
+
 logger = logging.getLogger(__name__)
 
 
@@ -360,6 +362,10 @@ class StealthCrawler:
         Raises:
             Exception: On request failure after retries
         """
+        # Check for cancellation before starting fetch
+        if is_cancelled():
+            raise ScrapeCancelledException("Scrape cancelled by user")
+
         await self._wait_for_rate_limit()
         await self._init_browser()
         await self._reinit_browser_if_needed()
@@ -369,6 +375,9 @@ class StealthCrawler:
         page_was_reused = False
 
         for attempt in range(self.max_retries):
+            # Check for cancellation before each retry attempt
+            if is_cancelled():
+                raise ScrapeCancelledException("Scrape cancelled by user")
             page: Optional[Page] = None
             try:
                 # Check context before creating page - reinit if needed

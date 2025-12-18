@@ -144,19 +144,20 @@ def clear_crawlee_storage():
     storage_dir = Path(__file__).parent.parent / "storage"
     if storage_dir.exists():
         try:
-            # Remove request_queues to prevent scrape resumption
-            request_queues = storage_dir / "request_queues"
-            if request_queues.exists():
-                shutil.rmtree(request_queues)
-                logger.info("Cleared Crawlee request queues storage")
-
-            # Also clear key_value_stores for clean state
-            kv_stores = storage_dir / "key_value_stores"
-            if kv_stores.exists():
-                shutil.rmtree(kv_stores)
-                logger.info("Cleared Crawlee key-value stores")
+            # Remove entire storage directory for completely clean state
+            shutil.rmtree(storage_dir)
+            logger.info("Cleared entire Crawlee storage directory")
         except Exception as e:
             logger.warning(f"Failed to clear Crawlee storage: {e}")
+
+    # Also check for default crawlee storage location in current working directory
+    cwd_storage = Path.cwd() / "storage"
+    if cwd_storage.exists():
+        try:
+            shutil.rmtree(cwd_storage)
+            logger.info("Cleared Crawlee storage in CWD")
+        except Exception as e:
+            logger.warning(f"Failed to clear CWD storage: {e}")
 
 
 @asynccontextmanager
@@ -378,6 +379,12 @@ async def scrape_source(
     db: Session = Depends(get_db)
 ):
     """Trigger scraping for a specific source"""
+    # Clear cancel event at start of new scrape (in case previous stop left it set)
+    scrape_cancel_event.clear()
+
+    # Clear Crawlee storage for clean state (prevents "Request handler was never called" after stop)
+    clear_crawlee_storage()
+
     # Map source names to scraper registry keys
     source_map = {
         "sexyfriendstoronto": "sft",
@@ -393,6 +400,9 @@ async def scrape_source(
         "hiddengem": "hiddengem",
         "hge": "hiddengem",
         "hiddengemescorts": "hiddengem",
+        "topdrawer": "topdrawer",
+        "tdl": "topdrawer",
+        "topdrawerladies": "topdrawer",
     }
 
     source_key = source_map.get(source_name.lower())
@@ -427,6 +437,12 @@ async def scrape_all_sources(
     db: Session = Depends(get_db)
 ):
     """Trigger scraping for all active sources"""
+    # Clear cancel event at start of new scrape (in case previous stop left it set)
+    scrape_cancel_event.clear()
+
+    # Clear Crawlee storage for clean state (prevents "Request handler was never called" after stop)
+    clear_crawlee_storage()
+
     # Use new Crawlee-based scraper manager (default)
     manager = ScraperManager(db)
     results = await manager.scrape_all()
@@ -633,7 +649,7 @@ async def get_listings(
         if schedule_filters:
             subquery = subquery.filter(and_(*schedule_filters))
 
-        query = query.filter(Listing.id.in_(subquery.subquery()))
+        query = query.filter(Listing.id.in_(select(subquery.subquery())))
 
     # Filter by age
     if min_age:

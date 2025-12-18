@@ -20,6 +20,7 @@ from .sites.mirage import MirageScraper
 from .sites.select import SelectScraper
 from .sites.secret import SecretScraper
 from .sites.hiddengem import HiddenGemScraper
+from .sites.tdl import TDLScraper
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ SCRAPER_REGISTRY: Dict[str, Type[BaseScraper]] = {
     'select': SelectScraper,
     'secret': SecretScraper,
     'hiddengem': HiddenGemScraper,
+    'topdrawer': TDLScraper,
 }
 
 

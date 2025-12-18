@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"gemini-cli.debug.logging.enabled": true,
+		"files.associations": {
+			".env.example": "plaintext"
+		}
+	}
+}

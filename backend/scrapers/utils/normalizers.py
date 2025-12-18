@@ -18,30 +18,32 @@ def normalize_name(name: str) -> str:
         DAISY DUKES -> Daisy Dukes
         Aerynmonroe -> Aeryn Monroe (split camelCase)
         aerynmonroe -> Aeryn Monroe (split and capitalize)
+        S O F I A -> Sofia (collapse spaced letters)
+        A N N A -> Anna (collapse spaced letters)
     """
     if not name:
         return name
-    
+
     name = name.strip()
-    
+
+    # Handle spaced-out letters like "S O F I A" or "A N N A"
+    # Check if it's single letters separated by spaces
+    if re.match(r'^([A-Za-z]\s+)+[A-Za-z]$', name):
+        # Remove all spaces to collapse letters, then title case and return early
+        return name.replace(' ', '').title()
+
     # Check if name has no spaces but has mixed case (camelCase)
     # e.g., "AerynMonroe" or "Aerynmonroe"
-    if ' ' not in name and len(name) > 1:
+    # Skip this for all-uppercase names (they should just be title-cased)
+    if ' ' not in name and len(name) > 1 and not name.isupper():
         # Insert space before each capital letter (except the first)
         # This handles "AerynMonroe" -> "Aeryn Monroe"
         spaced = re.sub(r'(?<!^)(?=[A-Z])', ' ', name)
-        
+
         # If we added spaces, use the spaced version
         if ' ' in spaced:
             name = spaced
-        else:
-            # No capitals found (all lowercase like "aerynmonroe")
-            # Try common name patterns - split on common name boundaries
-            # This is a heuristic for URL slugs like "aerynmonroe"
-            # Look for patterns where a consonant cluster might indicate word boundary
-            # For now, just title case it - manual fix may be needed
-            pass
-    
+
     return name.title()
 
 

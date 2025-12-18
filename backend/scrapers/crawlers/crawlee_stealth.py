@@ -71,6 +71,10 @@ class CrawleeStealth:
         from crawlee.crawlers import PlaywrightCrawler
         from crawlee.storage_clients import MemoryStorageClient
 
+        # Check for cancellation before starting fetch
+        if is_cancelled():
+            raise ScrapeCancelledException("Scrape cancelled by user")
+
         await self._wait_for_rate_limit()
 
         result_html = None
@@ -84,11 +88,16 @@ class CrawleeStealth:
             result_html = await page.content()
 
         for attempt in range(self.max_retries):
+            # Check for cancellation before each retry attempt
+            if is_cancelled():
+                raise ScrapeCancelledException("Scrape cancelled by user")
+
             result_html = None
             handler_called = False
             try:
                 # Use MemoryStorageClient to avoid file-based request deduplication
                 # This prevents "Request handler was never called" on repeated scrapes
+                # use_incognito_pages=True ensures each page gets fresh context
                 crawler = PlaywrightCrawler(
                     headless=self.headless,
                     browser_launch_options={
@@ -100,6 +109,7 @@ class CrawleeStealth:
                     },
                     max_requests_per_crawl=1,
                     storage_client=MemoryStorageClient(),
+                    use_incognito_pages=True,  # Each page gets fresh context
                 )
                 crawler.router.default_handler(request_handler)
 
@@ -137,9 +147,16 @@ class CrawleeStealth:
         from crawlee.crawlers import PlaywrightCrawler
         from crawlee.storage_clients import MemoryStorageClient
 
+        # Check for cancellation before starting batch fetch
+        if is_cancelled():
+            raise ScrapeCancelledException("Scrape cancelled by user")
+
         results = {}
 
         async def request_handler(context):
+            # Check for cancellation in handler
+            if is_cancelled():
+                raise ScrapeCancelledException("Scrape cancelled by user")
             page = context.page
             url = context.request.url
             html = await page.content()
@@ -160,6 +177,7 @@ class CrawleeStealth:
                 max_requests_per_crawl=len(urls),
                 max_crawl_depth=0,  # Don't follow links
                 storage_client=MemoryStorageClient(),
+                use_incognito_pages=True,  # Each page gets fresh context
             )
             crawler.router.default_handler(request_handler)
 

@@ -51,7 +51,8 @@ class Settings(BaseSettings):
         return Path(__file__).parent.parent / "data"
 
     class Config:
-        env_file = ".env"
+        # Only load .env if it exists to avoid permission errors
+        env_file = ".env" if __import__("pathlib").Path(".env").exists() else None
         env_file_encoding = "utf-8"
         case_sensitive = False
         extra = "ignore"  # Ignore extra environment variables
