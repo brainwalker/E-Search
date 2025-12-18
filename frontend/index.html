@@ -2224,6 +2224,11 @@
         <div id="modalContent" class="modal-content"></div>
     </div>
 
+    <!-- Refresh Results Modal -->
+    <div id="refreshResultsModal" class="modal">
+        <div id="refreshResultsContent" class="modal-content" style="max-width: 500px;"></div>
+    </div>
+
     <!-- Image Viewer -->
     <div id="imageViewer" class="image-viewer">
         <span class="viewer-close" onclick="closeImageViewer()">&times;</span>
@@ -3318,7 +3323,18 @@
                     const img = newCard.querySelector('.listing-thumbnail[data-src]');
                     if (img && imageObserver) imageObserver.observe(img);
                 }
-                showNotification('Refreshed!', 'success');
+
+                // Remove spinning animation
+                if (btnElement) {
+                    btnElement.classList.remove('refreshing');
+                }
+
+                // Show refresh results modal with scraped values
+                if (updatedListing._debug_info?.scraped_values) {
+                    showRefreshResultsModal(updatedListing.name, updatedListing._debug_info);
+                } else {
+                    showNotification('Refreshed!', 'success');
+                }
             } catch (error) {
                 console.error('❌ Refresh error:', error);
                 showNotification(error.message || 'Failed to refresh.', 'error');
@@ -3516,6 +3532,82 @@
             document.getElementById('listingModal').style.display = 'none';
             document.body.style.overflow = '';
         }
+
+        // Refresh results modal
+        function showRefreshResultsModal(name, debugInfo) {
+            const modal = document.getElementById('refreshResultsModal');
+            const scraped = debugInfo.scraped_values || {};
+            const current = debugInfo.current_values || {};
+
+            // Field labels for display
+            const fieldLabels = {
+                'tier': 'Tier',
+                'age': 'Age',
+                'nationality': 'Nationality',
+                'ethnicity': 'Ethnicity',
+                'height': 'Height',
+                'weight': 'Weight',
+                'measurements': 'Measurements',
+                'bust': 'Bust',
+                'bust_type': 'Bust Type',
+                'eye_color': 'Eye Color',
+                'hair_color': 'Hair Color',
+                'service_type': 'Service Type'
+            };
+
+            // Build rows showing scraped value and current DB value
+            const rows = Object.entries(fieldLabels).map(([key, label]) => {
+                const scrapedVal = scraped[key];
+                const currentVal = current[key];
+                const displayScraped = scrapedVal !== null && scrapedVal !== undefined ? scrapedVal : '—';
+                const displayCurrent = currentVal !== null && currentVal !== undefined ? currentVal : '—';
+                const scrapedStyle = scrapedVal ? '' : 'opacity: 0.4;';
+                const currentStyle = currentVal ? 'color: #34d399;' : 'opacity: 0.4;';
+                return `
+                    <tr style="border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1));">
+                        <td style="padding: 8px 12px; font-weight: 600; color: var(--text-primary);">${label}</td>
+                        <td style="padding: 8px 12px; ${scrapedStyle}">${displayScraped}</td>
+                        <td style="padding: 8px 12px; ${currentStyle}">${displayCurrent}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.getElementById('refreshResultsContent').innerHTML = `
+                <div class="modal-header" style="padding: 20px 24px;">
+                    <h2 style="font-size: 1.3rem; margin: 0;">✅ ${name}</h2>
+                    <span class="modal-close" onclick="closeRefreshResultsModal()">&times;</span>
+                </div>
+                <div class="modal-body" style="padding: 20px 24px;">
+                    <div style="margin-bottom: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; font-size: 0.85rem; color: var(--text-secondary);">
+                        <strong>Scraper:</strong> ${debugInfo.scraper_used}<br>
+                        <strong>Fields Updated:</strong> ${debugInfo.fields_updated}
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead>
+                            <tr style="background: var(--bg-tertiary);">
+                                <th style="padding: 10px 12px; text-align: left;">Field</th>
+                                <th style="padding: 10px 12px; text-align: left;">Scraped</th>
+                                <th style="padding: 10px 12px; text-align: left;">Current</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            modal.style.display = 'flex';
+        }
+
+        function closeRefreshResultsModal() {
+            document.getElementById('refreshResultsModal').style.display = 'none';
+        }
+
+        // Close refresh modal on backdrop click
+        document.getElementById('refreshResultsModal')?.addEventListener('click', function(e) {
+            if (e.target === this) closeRefreshResultsModal();
+        });
 
         // Image viewer
         let currentImageIndex = 0;

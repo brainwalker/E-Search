@@ -12,8 +12,32 @@ from enum import Enum
 from datetime import datetime, timedelta, timezone
 import logging
 import json
+import asyncio
 
 logger = logging.getLogger(__name__)
+
+
+class ScrapeCancelledException(Exception):
+    """Exception raised when a scrape is cancelled by user."""
+    pass
+
+
+# Global cancel event - can be set from main.py to stop scraping
+_scrape_cancel_event: Optional[asyncio.Event] = None
+
+
+def set_cancel_event(event: asyncio.Event):
+    """Set the global cancel event for scraper cancellation."""
+    global _scrape_cancel_event
+    _scrape_cancel_event = event
+
+
+def is_cancelled() -> bool:
+    """Check if scraping has been cancelled."""
+    global _scrape_cancel_event
+    if _scrape_cancel_event is not None:
+        return _scrape_cancel_event.is_set()
+    return False
 
 # ANSI color codes for terminal output
 class Colors:
@@ -145,6 +169,12 @@ class ScrapeResult:
     errors: int = 0
     error_details: List[Dict] = field(default_factory=list)
 
+    # Detailed tracking for debugging UI
+    new_listings: List[Dict] = field(default_factory=list)  # [{name, profile_url, fields}]
+    updated_listings: List[Dict] = field(default_factory=list)  # [{name, profile_url, changes}]
+    missing_fields: Dict[str, List[str]] = field(default_factory=dict)  # {field: [profile_names]}
+    schedule_changes: List[Dict] = field(default_factory=list)  # [{name, action, schedules}]
+
     @property
     def success(self) -> bool:
         return self.errors == 0
@@ -167,6 +197,11 @@ class ScrapeResult:
             'errors': self.errors,
             'error_details': self.error_details[:10],  # Limit error details
             'success': self.success,
+            # Detailed info for debugging UI
+            'new_listings': self.new_listings,
+            'updated_listings': self.updated_listings,
+            'missing_fields': self.missing_fields,
+            'schedule_changes': self.schedule_changes,
         }
 
 
@@ -354,10 +389,12 @@ class BaseScraper(ABC):
         if schedule_items and not combined_data.get('schedules'):
             combined_data['schedules'] = [{'day_of_week': s.day_of_week} for s in schedule_items]
 
-        # All possible fields we track
-        all_fields = ['age', 'nationality', 'ethnicity', 'height', 'weight', 'bust', 'bust_type',
-                      'measurements', 'hair_color', 'eye_color', 'service_type', 'tier', 'images',
-                      'tags', 'schedules']
+        # All possible fields we track - use scraper-specific list if available
+        all_fields = getattr(self, 'expected_fields', [
+            'age', 'nationality', 'ethnicity', 'height', 'weight', 'bust', 'bust_type',
+            'measurements', 'hair_color', 'eye_color', 'service_type', 'tier', 'images',
+            'tags', 'schedules'
+        ])
 
         extracted = []
         missing = []
@@ -401,7 +438,7 @@ class BaseScraper(ABC):
         if missing:
             # Strip color codes for plain text readability
             missing_plain = [f.replace(Colors.GRAY, '').replace(Colors.RESET, '') for f in missing]
-            self.logger.info(f"   ✘ missing: {', '.join(missing_plain)}")
+            self.logger.warning(f"   ✘ missing: {', '.join(missing_plain)}")
 
     def normalize_listing(self, schedule_item: ScheduleItem, profile_data: Dict, all_schedule_items: Optional[List[ScheduleItem]] = None) -> ScrapedListing:
         """
@@ -508,6 +545,7 @@ class BaseScraper(ABC):
         ).first()
 
         is_new = existing is None
+        field_changes = []  # Track field changes for logging
 
         if is_new:
             db_listing = Listing(
@@ -519,22 +557,38 @@ class BaseScraper(ABC):
         else:
             db_listing = existing
 
-        # Update fields
-        db_listing.tier = listing.tier
-        db_listing.age = listing.age
-        db_listing.nationality = listing.nationality
-        db_listing.ethnicity = listing.ethnicity
-        db_listing.height = listing.height
-        db_listing.weight = listing.weight
-        db_listing.bust = listing.bust
-        db_listing.bust_type = listing.bust_type
-        db_listing.measurements = listing.measurements
-        db_listing.hair_color = listing.hair_color
-        db_listing.eye_color = listing.eye_color
-        db_listing.service_type = listing.service_type
+        # Update fields and track changes
+        update_fields = [
+            ('tier', listing.tier),
+            ('age', listing.age),
+            ('nationality', listing.nationality),
+            ('ethnicity', listing.ethnicity),
+            ('height', listing.height),
+            ('weight', listing.weight),
+            ('bust', listing.bust),
+            ('bust_type', listing.bust_type),
+            ('measurements', listing.measurements),
+            ('hair_color', listing.hair_color),
+            ('eye_color', listing.eye_color),
+            ('service_type', listing.service_type),
+        ]
+
+        for field_name, new_value in update_fields:
+            old_value = getattr(db_listing, field_name, None)
+            if not is_new and old_value != new_value and new_value is not None:
+                # Track meaningful changes (not just None -> value on new listings)
+                if old_value is not None:
+                    field_changes.append(f"{field_name}: {old_value} ➟ {new_value}")
+                elif old_value is None and new_value is not None:
+                    field_changes.append(f"{field_name}: + {new_value}")
+            setattr(db_listing, field_name, new_value)
+
         db_listing.images = json.dumps(listing.images) if listing.images else None
         db_listing.is_active = True
         db_listing.is_expired = False
+
+        # Store field changes for logging
+        self._last_field_changes = field_changes
 
         # Per-listing pricing (for sources with variable pricing)
         db_listing.incall_30min = listing.incall_30min
@@ -548,7 +602,11 @@ class BaseScraper(ABC):
         # Handle schedules
         # IMPORTANT: Delete all existing schedules first to avoid duplicates
         # Schedules change frequently (daily/weekly) and we want fresh data
+        old_schedule_count = 0
         if not is_new:
+            old_schedule_count = self.db.query(Schedule).filter_by(
+                listing_id=db_listing.id
+            ).count()
             deleted_count = self.db.query(Schedule).filter_by(
                 listing_id=db_listing.id
             ).delete(synchronize_session=False)
@@ -714,6 +772,17 @@ class BaseScraper(ABC):
             )
             self.db.add(new_schedule)
 
+        # Track schedule changes for detailed results
+        new_schedule_count = len(listing.schedules)
+        if not is_new and (old_schedule_count != new_schedule_count):
+            self._last_schedule_action = {
+                'action': 'refreshed',
+                'old_count': old_schedule_count,
+                'count': new_schedule_count,
+            }
+        else:
+            self._last_schedule_action = None
+
         # Handle tags
         existing_tag_ids = {t.id for t in db_listing.tags}
         for tag_name in listing.tags:
@@ -742,6 +811,46 @@ class BaseScraper(ABC):
             self.db.commit()
             self._pending_commits = 0
 
+    def _track_missing_fields(self, listing: ScrapedListing, profile_name: str):
+        """Track which expected fields are missing from a scraped listing."""
+        # Fields that are expected to be populated
+        expected_fields = getattr(self, 'expected_fields', [
+            'age', 'ethnicity', 'height', 'weight', 'bust', 'measurements',
+            'hair_color', 'eye_color', 'tier', 'images', 'schedules'
+        ])
+
+        for field in expected_fields:
+            value = getattr(listing, field, None)
+            # Check if field is missing or empty
+            is_missing = (
+                value is None or
+                value == '' or
+                (isinstance(value, (list, dict)) and len(value) == 0)
+            )
+            if is_missing:
+                if field not in self.result.missing_fields:
+                    self.result.missing_fields[field] = []
+                # Limit to 20 profiles per field to avoid huge responses
+                if len(self.result.missing_fields[field]) < 20:
+                    self.result.missing_fields[field].append(profile_name)
+
+    def _get_populated_fields(self, listing: ScrapedListing) -> List[str]:
+        """Get list of fields that have values."""
+        fields = []
+        check_fields = [
+            'tier', 'age', 'ethnicity', 'nationality', 'height', 'weight',
+            'bust', 'bust_type', 'measurements', 'hair_color', 'eye_color',
+            'service_type', 'images', 'schedules'
+        ]
+        for field in check_fields:
+            value = getattr(listing, field, None)
+            if value is not None and value != '':
+                if isinstance(value, (list, dict)) and len(value) > 0:
+                    fields.append(f"{field}({len(value)})")
+                elif not isinstance(value, (list, dict)):
+                    fields.append(field)
+        return fields
+
     async def run(self) -> ScrapeResult:
         """
         Main entry point - orchestrates the full scraping process.
@@ -759,6 +868,31 @@ class BaseScraper(ABC):
             self.result.total = len(schedule_items)
             self.logger.info(f"Found {len(schedule_items)} schedule items")
 
+            # Filter out duo listings (e.g., "ANAISHA & JADE DUO", "NAME1 & NAME2")
+            def is_duo_listing(name: str) -> bool:
+                name_upper = name.upper()
+                # Check for explicit DUO marker
+                if 'DUO' in name_upper:
+                    return True
+                # Check for "& " pattern indicating two names
+                if ' & ' in name or ' AND ' in name_upper:
+                    return True
+                return False
+
+            filtered_items = []
+            skipped_duos = 0
+            for item in schedule_items:
+                if is_duo_listing(item.name):
+                    skipped_duos += 1
+                    self.logger.debug(f"Skipping duo listing: {item.name}")
+                else:
+                    filtered_items.append(item)
+
+            if skipped_duos > 0:
+                self.logger.info(f"Skipped {skipped_duos} duo listing(s)")
+
+            schedule_items = filtered_items
+
             # Group schedule items by profile URL to collect all schedules per profile
             profiles_schedules = {}
             for item in schedule_items:
@@ -771,6 +905,12 @@ class BaseScraper(ABC):
 
             # Step 2: Process each listing
             for idx, profile_url in enumerate(unique_profiles, 1):
+                # Check for cancellation before processing each profile
+                if is_cancelled():
+                    self.logger.warning(f"⛔ Scrape cancelled by user at profile {idx}/{len(unique_profiles)}")
+                    self.result.error_details.append({'error': 'Cancelled by user'})
+                    raise ScrapeCancelledException("Scrape cancelled by user")
+
                 try:
                     # Get first schedule item for basic info (name, tier, etc.)
                     schedule_items_for_profile = profiles_schedules[profile_url]
@@ -798,16 +938,55 @@ class BaseScraper(ABC):
                     # Save
                     is_new, old_listing = await self.save_listing(listing)
 
+                    # Track missing fields for this profile
+                    self._track_missing_fields(listing, first_item.name)
+
                     if is_new:
                         self.result.new += 1
                         self.logger.info(f"   {Colors.green('[NEW]')} {first_item.name}: created new listing")
+                        # Track new listing details
+                        self.result.new_listings.append({
+                            'name': first_item.name,
+                            'profile_url': profile_url,
+                            'tier': listing.tier,
+                            'fields': self._get_populated_fields(listing),
+                        })
+                        # Track schedule addition
+                        if listing.schedules:
+                            self.result.schedule_changes.append({
+                                'name': first_item.name,
+                                'action': 'added',
+                                'count': len(listing.schedules),
+                                'schedules': listing.schedules[:5],  # Limit to 5
+                            })
                     else:
-                        self.result.updated += 1
-                        self.logger.info(f"   {Colors.blue('[UPD]')} {first_item.name}: updated existing listing")
+                        # Only count as update if there are actual field changes
+                        changes = getattr(self, '_last_field_changes', [])
+                        if changes:
+                            self.result.updated += 1
+                            changes_str = ', '.join(changes[:3])  # Show up to 3 changes
+                            if len(changes) > 3:
+                                changes_str += f" (+{len(changes) - 3} more)"
+                            self.logger.info(f"   {Colors.yellow('[UPD]')} {first_item.name}: {changes_str}")
+                            # Track updated listing details
+                            self.result.updated_listings.append({
+                                'name': first_item.name,
+                                'profile_url': profile_url,
+                                'changes': changes,
+                            })
+                        # Track schedule refresh for existing listings
+                        schedule_action = getattr(self, '_last_schedule_action', None)
+                        if schedule_action:
+                            self.result.schedule_changes.append({
+                                'name': first_item.name,
+                                'action': schedule_action['action'],
+                                'count': schedule_action.get('count', 0),
+                                'old_count': schedule_action.get('old_count', 0),
+                            })
 
                     # Progress update every 10 profiles
                     if idx % 10 == 0:
-                        self.logger.info(f"\n{Colors.bold('Progress')}: {idx}/{len(unique_profiles)} profiles ({Colors.green(f'{self.result.new} new')}, {Colors.blue(f'{self.result.updated} updated')}, {Colors.red(f'{self.result.errors} errors')})")
+                        self.logger.info(f"{Colors.bold('Progress')}: {idx}/{len(unique_profiles)} profiles ({Colors.green(f'{self.result.new} new')}, {Colors.blue(f'{self.result.updated} updated')}, {Colors.red(f'{self.result.errors} errors')})")
 
                 except Exception as e:
                     self.result.errors += 1
@@ -829,6 +1008,16 @@ class BaseScraper(ABC):
                 f"{self.result.updated} updated, {self.result.errors} errors"
             )
 
+            return self.result
+
+        except ScrapeCancelledException:
+            # User cancelled - commit what we have and return partial result
+            self.result.completed_at = datetime.now(timezone.utc)
+            self.logger.warning(f"⛔ Scrape cancelled. Partial results: {self.result.new} new, {self.result.updated} updated")
+            try:
+                self._flush_pending_commits()
+            except Exception:
+                pass
             return self.result
 
         except Exception as e:

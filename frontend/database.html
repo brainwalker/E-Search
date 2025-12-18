@@ -430,6 +430,7 @@
             width: 0 !important;
             min-width: 0 !important;
             max-width: 0 !important;
+            margin-right: -20px; /* Compensate for gap when collapsed */
             overflow: hidden;
         }
 
@@ -984,6 +985,12 @@
         .log-line.debug {
             color: #60a5fa;
             background: rgba(96, 165, 250, 0.05);
+        }
+        .log-line.progress {
+            color: #00f5ff;
+            background: rgba(0, 245, 255, 0.12);
+            border-left: 3px solid #00f5ff;
+            font-weight: 600;
         }
         .log-line.http-request {
             color: #a78bfa;
@@ -1546,7 +1553,17 @@
                     <div class="scrape-stat"><span class="stat-label">New:</span> <span id="scrapingNew" class="stat-new">0</span></div>
                     <div class="scrape-stat"><span class="stat-label">Updated:</span> <span id="scrapingUpdated" class="stat-updated">0</span></div>
                     <div class="scrape-stat"><span class="stat-label">Errors:</span> <span id="scrapingErrors" class="stat-errors">0</span></div>
+                    <button id="scrapeDetailsBtn" class="btn-small btn-primary" onclick="showScrapeDetailsModal()" style="display: none; margin-left: auto;">📋 Details</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Scrape Details Modal -->
+        <div class="modal" id="scrapeDetailsModal">
+            <div class="modal-content" style="max-width: 900px; max-height: 80vh; overflow: auto;">
+                <span class="modal-close" onclick="closeScrapeDetailsModal()">&times;</span>
+                <h3 style="margin-bottom: 16px; color: var(--text-primary);">Scrape Details - <span id="scrapeDetailsSource"></span></h3>
+                <div id="scrapeDetailsContent" style="font-size: 0.9rem;"></div>
             </div>
         </div>
 
@@ -1560,6 +1577,11 @@
             <!-- Left Sidebar - Improved -->
             <div class="sidebar-wrapper collapsed" id="sidebarWrapper">
                 <div class="left-sidebar collapsed" id="leftSidebar">
+                    <!-- Restart Backend - Red button at top -->
+                    <button class="btn-danger" id="restartCard" onclick="restartBackend()" style="width: 100%; padding: 12px; margin-bottom: 12px; font-weight: 600;">
+                        ⚡ Restart Backend
+                    </button>
+
                     <!-- Scrape Sources -->
                     <div class="sidebar-card" id="scrapeCard">
                         <div class="sidebar-card-header" onclick="toggleCard('scrapeCard')">
@@ -1711,6 +1733,8 @@
             console.log('🔄 Initializing database viewer...');
             await refreshDatabase();
             initSidebarResizer();
+            // Open logs view by default after a short delay
+            setTimeout(() => expandLogsView(), 100);
         }
 
         // Backend connectivity
@@ -2038,6 +2062,9 @@
 
             showScrapeStatus(apiName.toUpperCase());
 
+            // Expand logs view when scraping starts
+            expandLogsView();
+
             // Start polling logs for progress updates
             let progressPollInterval = null;
             const pollProgress = async () => {
@@ -2102,6 +2129,13 @@
         // Scrape Status Banner Functions
         function showScrapeStatus(source) {
             const banner = document.getElementById('scrapeStatusBanner');
+            const icon = banner.querySelector('.scrape-status-icon');
+            const title = banner.querySelector('.scrape-status-title');
+
+            // Reset to "in progress" state
+            icon.textContent = '🔄';
+            title.textContent = 'Scraping in progress...';
+
             document.getElementById('scrapingSource').textContent = source;
             document.getElementById('scrapingProgress').textContent = '0/0';
             document.getElementById('scrapingNew').textContent = '0';
@@ -2121,14 +2155,22 @@
             if (data.errors !== undefined) document.getElementById('scrapingErrors').textContent = data.errors;
         }
 
+        // Store last scrape result for details modal
+        let lastScrapeResult = null;
+
         function closeScrapeStatus() {
             document.getElementById('scrapeStatusBanner').style.display = 'none';
+            document.getElementById('scrapeDetailsBtn').style.display = 'none';
         }
 
         function completeScrapeStatus(data) {
             const banner = document.getElementById('scrapeStatusBanner');
             const icon = banner.querySelector('.scrape-status-icon');
             const title = banner.querySelector('.scrape-status-title');
+            const detailsBtn = document.getElementById('scrapeDetailsBtn');
+
+            // Store the result for the modal
+            lastScrapeResult = data;
 
             if (data.errors > 0) {
                 icon.textContent = '⚠️';
@@ -2138,9 +2180,137 @@
                 title.textContent = 'Scraping completed successfully!';
             }
 
-            setTimeout(() => {
-                closeScrapeStatus();
-            }, 5000);
+            // Show details button (don't auto-hide the banner)
+            detailsBtn.style.display = 'inline-block';
+
+            // Don't auto-hide - user can close manually or view details
+        }
+
+        function showScrapeDetailsModal() {
+            if (!lastScrapeResult) return;
+
+            const modal = document.getElementById('scrapeDetailsModal');
+            const sourceSpan = document.getElementById('scrapeDetailsSource');
+            const content = document.getElementById('scrapeDetailsContent');
+
+            sourceSpan.textContent = lastScrapeResult.source || 'Unknown';
+
+            let html = '';
+
+            // Summary section
+            html += `<div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+                <strong>Summary:</strong> ${lastScrapeResult.total || 0} profiles processed,
+                <span style="color: var(--success-color)">${lastScrapeResult.new || 0} new</span>,
+                <span style="color: var(--accent-primary)">${lastScrapeResult.updated || 0} updated</span>,
+                <span style="color: var(--danger-color)">${lastScrapeResult.errors || 0} errors</span>
+                ${lastScrapeResult.duration_seconds ? `<br>Duration: ${lastScrapeResult.duration_seconds.toFixed(1)}s` : ''}
+            </div>`;
+
+            // Missing Fields Section
+            if (lastScrapeResult.missing_fields && Object.keys(lastScrapeResult.missing_fields).length > 0) {
+                html += `<details open style="margin-bottom: 16px;">
+                    <summary style="cursor: pointer; font-weight: bold; color: var(--warning-color); margin-bottom: 8px;">
+                        ⚠️ Missing Fields (${Object.keys(lastScrapeResult.missing_fields).length} field types)
+                    </summary>
+                    <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; max-height: 200px; overflow-y: auto;">`;
+
+                for (const [field, profiles] of Object.entries(lastScrapeResult.missing_fields)) {
+                    html += `<div style="margin-bottom: 8px;">
+                        <strong style="color: var(--text-secondary)">${field}:</strong>
+                        <span style="color: var(--text-muted)">${profiles.join(', ')}${profiles.length >= 20 ? ' ...' : ''}</span>
+                    </div>`;
+                }
+                html += '</div></details>';
+            }
+
+            // New Listings Section
+            if (lastScrapeResult.new_listings && lastScrapeResult.new_listings.length > 0) {
+                html += `<details style="margin-bottom: 16px;">
+                    <summary style="cursor: pointer; font-weight: bold; color: var(--success-color); margin-bottom: 8px;">
+                        ✅ New Listings (${lastScrapeResult.new_listings.length})
+                    </summary>
+                    <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; max-height: 250px; overflow-y: auto;">`;
+
+                for (const listing of lastScrapeResult.new_listings) {
+                    html += `<div style="margin-bottom: 8px; padding: 8px; background: var(--bg-tertiary); border-radius: 4px;">
+                        <strong>${listing.name}</strong>
+                        ${listing.tier ? `<span style="color: var(--accent-primary); margin-left: 8px;">[${listing.tier}]</span>` : ''}
+                        <br><span style="font-size: 0.85rem; color: var(--text-muted)">
+                            Fields: ${listing.fields ? listing.fields.join(', ') : 'none'}
+                        </span>
+                    </div>`;
+                }
+                html += '</div></details>';
+            }
+
+            // Updated Listings Section
+            if (lastScrapeResult.updated_listings && lastScrapeResult.updated_listings.length > 0) {
+                html += `<details style="margin-bottom: 16px;">
+                    <summary style="cursor: pointer; font-weight: bold; color: var(--accent-primary); margin-bottom: 8px;">
+                        🔄 Updated Listings (${lastScrapeResult.updated_listings.length})
+                    </summary>
+                    <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; max-height: 250px; overflow-y: auto;">`;
+
+                for (const listing of lastScrapeResult.updated_listings) {
+                    html += `<div style="margin-bottom: 8px; padding: 8px; background: var(--bg-tertiary); border-radius: 4px;">
+                        <strong>${listing.name}</strong>
+                        <br><span style="font-size: 0.85rem; color: var(--text-muted)">
+                            Changes: ${listing.changes ? listing.changes.join(', ') : 'none'}
+                        </span>
+                    </div>`;
+                }
+                html += '</div></details>';
+            }
+
+            // Schedule Changes Section
+            if (lastScrapeResult.schedule_changes && lastScrapeResult.schedule_changes.length > 0) {
+                html += `<details style="margin-bottom: 16px;">
+                    <summary style="cursor: pointer; font-weight: bold; color: var(--info-color); margin-bottom: 8px;">
+                        📅 Schedule Changes (${lastScrapeResult.schedule_changes.length})
+                    </summary>
+                    <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; max-height: 200px; overflow-y: auto;">`;
+
+                for (const change of lastScrapeResult.schedule_changes) {
+                    let changeText = '';
+                    if (change.action === 'added') {
+                        changeText = `Added ${change.count} schedule(s)`;
+                    } else if (change.action === 'refreshed') {
+                        changeText = `${change.old_count} → ${change.count} schedules`;
+                    }
+                    html += `<div style="margin-bottom: 4px;">
+                        <strong>${change.name}:</strong> <span style="color: var(--text-muted)">${changeText}</span>
+                    </div>`;
+                }
+                html += '</div></details>';
+            }
+
+            // Errors Section
+            if (lastScrapeResult.error_details && lastScrapeResult.error_details.length > 0) {
+                html += `<details open style="margin-bottom: 16px;">
+                    <summary style="cursor: pointer; font-weight: bold; color: var(--danger-color); margin-bottom: 8px;">
+                        ❌ Errors (${lastScrapeResult.error_details.length})
+                    </summary>
+                    <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; max-height: 200px; overflow-y: auto;">`;
+
+                for (const err of lastScrapeResult.error_details) {
+                    html += `<div style="margin-bottom: 8px; padding: 8px; background: rgba(239, 68, 68, 0.1); border-radius: 4px; border-left: 3px solid var(--danger-color);">
+                        <strong>${err.profile_url || 'Unknown'}</strong>
+                        <br><span style="font-size: 0.85rem; color: var(--text-muted)">${err.error || 'Unknown error'}</span>
+                    </div>`;
+                }
+                html += '</div></details>';
+            }
+
+            if (!html.includes('<details')) {
+                html += '<p style="color: var(--text-muted); text-align: center;">No detailed information available.</p>';
+            }
+
+            content.innerHTML = html;
+            modal.style.display = 'flex';
+        }
+
+        function closeScrapeDetailsModal() {
+            document.getElementById('scrapeDetailsModal').style.display = 'none';
         }
 
         // Delete source data
@@ -2917,15 +3087,31 @@
             }
 
             // Classify based on extracted log level or content
-            if (logLevel === 'ERROR' || logLevel === 'CRITICAL' || line.includes('errors)')) className = 'error';
-            else if (logLevel === 'WARNING' || line.includes('WARN')) className = 'warning';
+            // Check for progress line with errors - only red if actual errors exist
+            const progressMatch = line.match(/(\d+)\s+errors?\)/);
+            const hasActualErrors = progressMatch && parseInt(progressMatch[1]) > 0;
+
+            if (logLevel === 'ERROR' || logLevel === 'CRITICAL' || hasActualErrors || line.includes('[ERR]')) className = 'error';
+            else if (logLevel === 'WARNING' || line.includes('WARN') || line.includes('✘ missing')) className = 'warning';
+            else if (line.includes('[UPD]')) className = 'debug';  // Updates are light blue
+            else if (line.includes('[NEW]')) className = 'info';  // New listings are green
+            else if (line.includes('Progress:') || line.includes('Scrape complete') || line.includes('✅')) className = 'progress';  // Progress and completion lines are neon blue
             else if (logLevel === 'INFO') className = 'info';
             else if (logLevel === 'DEBUG') className = 'debug';
-            else if (line.includes('Progress:') || line.includes('❯❯❯') || line.includes('✅')) className = 'info';
+            else if (line.includes('❯❯❯')) className = 'info';
 
             const div = document.createElement('div');
             div.textContent = formattedLine;
-            return `<div class="log-line ${className}">${timePrefix}${div.innerHTML}</div>`;
+            let result = `<div class="log-line ${className}">${timePrefix}${div.innerHTML}</div>`;
+
+            // Add decorative separator after scrape completion
+            if (line.includes('Scrape complete')) {
+                result += `<div class="log-line">&nbsp;</div>`;
+                result += `<div class="log-line">▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄</div>`;
+                result += `<div class="log-line">&nbsp;</div>`;
+            }
+
+            return result;
         }
 
         function clearLogs() {
@@ -3014,6 +3200,28 @@
             if (logsUpdateInterval) {
                 clearInterval(logsUpdateInterval);
                 logsUpdateInterval = null;
+            }
+        }
+
+        async function stopAllScrapes() {
+            if (!confirm('Stop all running scrapes?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/scrape/stop`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    alert('All scrapes stopped');
+                    console.log('Stop scrapes response:', data);
+                } else {
+                    alert('Failed to stop scrapes: ' + response.status);
+                }
+            } catch (error) {
+                console.error('Error stopping scrapes:', error);
+                alert('Error stopping scrapes: ' + error.message);
             }
         }
 
@@ -3169,12 +3377,10 @@
             container.innerHTML = `
                 <div class="logs-view" id="logsView">
                     <div class="logs-view-header">
-                        <button class="btn-secondary btn-small" onclick="closeLogsView()" title="Back to tables">← Back</button>
+                        <button class="btn-danger btn-small" onclick="stopAllScrapes()" title="Stop all running scrapes">🛑 Stop Scrapes</button>
                         <button class="btn-primary btn-small" id="pauseLogsBtn" onclick="toggleLogsPause()">
                             <span id="pauseIcon">⏸️</span> <span id="pauseText">Pause</span>
                         </button>
-                        <button class="btn-success btn-small" onclick="refreshLogs()" title="Refresh logs">🔄 Refresh</button>
-                        <button class="btn-warning btn-small" onclick="clearLogs()" title="Clear logs">🗑️ Clear</button>
                         <div class="logs-filters" style="margin-left: auto;">
                             <button class="log-filter-btn active" data-filter="error" onclick="toggleLogFilter('error', this)" title="Errors">ERR</button>
                             <button class="log-filter-btn active" data-filter="warning" onclick="toggleLogFilter('warning', this)" title="Warnings">WARN</button>
@@ -3182,7 +3388,6 @@
                             <button class="log-filter-btn active" data-filter="debug" onclick="toggleLogFilter('debug', this)" title="Debug">DBG</button>
                             <button class="log-filter-btn" data-filter="http" onclick="toggleLogFilter('http', this)" title="HTTP requests">HTTP</button>
                         </div>
-                        <button class="btn-danger btn-small" onclick="restartBackend()" title="Restart backend">⚡ Restart</button>
                     </div>
                     <div class="logs-container" id="logsContainer">
                         <div class="loading"><p>Loading logs...</p></div>
@@ -3335,7 +3540,7 @@
                     <tbody>
             `;
             
-            const fields = ['tier', 'age', 'nationality', 'ethnicity', 'height', 'weight', 'measurements', 'bust', 'eye_color', 'hair_color', 'service_type'];
+            const fields = ['tier', 'age', 'nationality', 'ethnicity', 'height', 'weight', 'measurements', 'bust', 'bust_type', 'eye_color', 'hair_color', 'service_type'];
             
             for (const field of fields) {
                 const ext = extractions[field] || {};

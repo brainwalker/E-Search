@@ -16,6 +16,7 @@ from sqlalchemy.orm import joinedload
 from api.scraper import SexyFriendsTorontoScraper
 from api.config import settings
 from scrapers.manager import ScraperManager, SCRAPER_REGISTRY
+from scrapers.base import set_cancel_event
 from api import db_viewer
 from pydantic import BaseModel
 
@@ -93,6 +94,9 @@ uvicorn_access_logger.addFilter(PollingEndpointFilter())
 # Global shutdown event
 shutdown_event = asyncio.Event()
 
+# Global scrape cancellation event - set this to stop all running scrapes
+scrape_cancel_event = asyncio.Event()
+
 # Global caches with TTL
 _tier_cache: dict = {}
 _tier_cache_timestamp: float = 0
@@ -132,6 +136,29 @@ async def cleanup_resources():
     logger.info("Resource cleanup complete")
 
 
+def clear_crawlee_storage():
+    """Clear Crawlee storage to prevent resuming old scrapes on restart."""
+    import shutil
+    from pathlib import Path
+
+    storage_dir = Path(__file__).parent.parent / "storage"
+    if storage_dir.exists():
+        try:
+            # Remove request_queues to prevent scrape resumption
+            request_queues = storage_dir / "request_queues"
+            if request_queues.exists():
+                shutil.rmtree(request_queues)
+                logger.info("Cleared Crawlee request queues storage")
+
+            # Also clear key_value_stores for clean state
+            kv_stores = storage_dir / "key_value_stores"
+            if kv_stores.exists():
+                shutil.rmtree(kv_stores)
+                logger.info("Cleared Crawlee key-value stores")
+        except Exception as e:
+            logger.warning(f"Failed to clear Crawlee storage: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -145,6 +172,13 @@ async def lifespan(app: FastAPI):
     logger.info(f"Log file: {settings.log_file}")
     logger.info(f"Database: {settings.database_url}")
     logger.info(f"CORS origins: {settings.cors_origins}")
+
+    # Clear Crawlee storage to prevent resuming old scrapes
+    clear_crawlee_storage()
+
+    # Register the scrape cancel event so scrapers can check it
+    set_cancel_event(scrape_cancel_event)
+
     init_db()
     logger.info("Database initialized successfully")
     logger.info("Backend ready to accept requests")
@@ -310,6 +344,33 @@ async def get_sources(db: Session = Depends(get_db)):
     return sources
 
 
+@app.post("/api/scrape/stop")
+async def stop_all_scrapes():
+    """
+    Emergency stop for all running scrapes.
+    Clears Crawlee storage and signals cancellation.
+    """
+    logger.warning("⛔ Emergency scrape stop requested")
+
+    # Set the cancel event FIRST (scrapers check this in their loop)
+    scrape_cancel_event.set()
+
+    # Clear Crawlee storage to stop any pending requests
+    clear_crawlee_storage()
+
+    # Give scrapers time to see the cancel flag and exit gracefully
+    await asyncio.sleep(2.0)
+
+    # Clear the event so new scrapes can start
+    scrape_cancel_event.clear()
+
+    logger.info("✅ Scrape stop completed - all scrapers notified")
+    return {
+        "status": "stopped",
+        "message": "All scrapes stopped. Scrapers notified and storage cleared."
+    }
+
+
 @app.post("/api/scrape/{source_name}")
 async def scrape_source(
     source_name: str,
@@ -327,6 +388,11 @@ async def scrape_source(
         "mirage": "mirage",
         "select": "select",
         "selectcompany": "select",
+        "secret": "secret",
+        "secretescorts": "secret",
+        "hiddengem": "hiddengem",
+        "hge": "hiddengem",
+        "hiddengemescorts": "hiddengem",
     }
 
     source_key = source_map.get(source_name.lower())
@@ -748,11 +814,13 @@ async def debug_listing_extraction(listing_id: int, db: Session = Depends(get_db
         'Mirage': 'mirage',
         'SELECT': 'select',
         'SECRET': 'secret',
+        'HGE': 'hiddengem',
         'SexyFriendsToronto': 'sft',  # Legacy support
         'DiscreetDolls': 'discreet',  # Legacy support
         'MirageEntertainment': 'mirage',  # Legacy support
         'SelectCompanyEscorts': 'select',  # Legacy support
         'SecretEscorts': 'secret',  # Legacy support
+        'HiddenGemEscorts': 'hiddengem',  # Legacy support
     }
 
     # Try exact match first, then case-insensitive
@@ -797,7 +865,7 @@ async def debug_listing_extraction(listing_id: int, db: Session = Depends(get_db
             # Format as debug result structure
             # Build extractions dict with raw_text field populated from profile_data
             fields = ['tier', 'age', 'nationality', 'ethnicity', 'height', 'weight',
-                      'measurements', 'bust', 'eye_color', 'hair_color', 'service_type']
+                      'measurements', 'bust', 'bust_type', 'eye_color', 'hair_color', 'service_type']
             extractions = {}
             text_snippets = {}
             for field in fields:
@@ -899,11 +967,13 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
         'Mirage': 'mirage',
         'SELECT': 'select',
         'SECRET': 'secret',
+        'HGE': 'hiddengem',
         'SexyFriendsToronto': 'sft',  # Legacy support
         'DiscreetDolls': 'discreet',  # Legacy support
         'MirageEntertainment': 'mirage',  # Legacy support
         'SelectCompanyEscorts': 'select',  # Legacy support
         'SecretEscorts': 'secret',  # Legacy support
+        'HiddenGemEscorts': 'hiddengem',  # Legacy support
     }
 
     # Log for debugging
@@ -1043,11 +1113,31 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
         
         # Add debug info to response (for development/debugging)
         # This helps verify which scraper is being used
+        # Show both scraped values and current DB values for comparison
         result['_debug_info'] = {
             'scraper_used': scraper_class_name,
             'source_name': source.name,
             'scraper_key': scraper_key,
-            'fields_updated': updated_count
+            'fields_updated': updated_count,
+            'scraped_values': {
+                field: profile_data.get(field)
+                for field in update_fields
+                if field != 'images'
+            },
+            'current_values': {
+                'tier': listing.tier,
+                'age': listing.age,
+                'nationality': listing.nationality,
+                'ethnicity': listing.ethnicity,
+                'height': listing.height,
+                'weight': listing.weight,
+                'measurements': listing.measurements,
+                'bust': listing.bust,
+                'bust_type': listing.bust_type,
+                'eye_color': listing.eye_color,
+                'hair_color': listing.hair_color,
+                'service_type': listing.service_type,
+            }
         }
         
         return result

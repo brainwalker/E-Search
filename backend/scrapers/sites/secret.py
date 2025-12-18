@@ -82,7 +82,15 @@ class SecretScraper(BaseScraper):
     - Schedule page: Days with list of escorts showing Name | Time | Location
     - Secrets page: List of all escorts with their tier badges
     - Profile pages: Stats section with age/height/measurements, rates
+
+    Note: Secret doesn't list nationality, service_type, or tags on profiles.
     """
+
+    # Fields available on Secret profiles (no nationality, service_type, tags)
+    expected_fields = [
+        'age', 'ethnicity', 'height', 'weight', 'bust', 'bust_type',
+        'measurements', 'hair_color', 'eye_color', 'tier', 'images', 'schedules'
+    ]
 
     def __init__(self, db_session=None):
         config = get_site_config('secret')
@@ -297,61 +305,83 @@ class SecretScraper(BaseScraper):
 
         # Get page text for regex parsing
         body = soup.find('body')
-        text = body.get_text(' ', strip=True) if body else ''
+        # Parse dl/dt/dd structure for stats - much cleaner than regex
+        stats = {}
+        for dl in soup.find_all('dl'):
+            dt = dl.find('dt')
+            dd = dl.find('dd')
+            if dt and dd:
+                key = dt.get_text(strip=True).lower()
+                value = dd.get_text(strip=True)
+                if value:
+                    stats[key] = value
 
-        # Age
-        age_match = re.search(r'Age[:\s]+(\d+)', text, re.IGNORECASE)
-        if age_match:
+        # Extract fields from dl/dt/dd stats
+        if 'age' in stats:
             try:
-                profile['age'] = int(age_match.group(1))
-            except ValueError:
+                profile['age'] = int(re.search(r'\d+', stats['age']).group())
+            except (ValueError, AttributeError):
                 pass
 
-        # Height - "5'4"" or "5ft 4in"
-        height_match = re.search(r'Height[:\s]+([\d\'"\s]+(?:ft|in)?)', text, re.IGNORECASE)
-        if height_match:
-            profile['height'] = normalize_height(height_match.group(1))
+        if 'height' in stats:
+            profile['height'] = normalize_height(stats['height'])
 
-        # Weight - "100 lbs"
-        weight_match = re.search(r'Weight[:\s]+(\d+\s*(?:lbs?|kg)?)', text, re.IGNORECASE)
-        if weight_match:
-            profile['weight'] = normalize_weight(weight_match.group(1))
+        if 'weight' in stats:
+            profile['weight'] = normalize_weight(stats['weight'])
 
-        # Bust/Waist/Hips from separate fields
-        bust_match = re.search(r'Bust[:\s]+(\d+[A-Z]*)', text, re.IGNORECASE)
-        if bust_match:
-            profile['bust'] = normalize_bust_size(bust_match.group(1))
+        # Check for combined measurements field first (e.g., "32-24-36", "34B-26-35", or "A28/24/34")
+        meas_key = next((k for k in stats if 'measurement' in k.lower()), None)
+        if meas_key:
+            normalized_meas = normalize_measurements(stats[meas_key])
+            profile['measurements'] = normalized_meas
+            # Extract bust from normalized measurements (handles "A28/24/34" -> "28A-24-34")
+            if normalized_meas:
+                bust_match = re.match(r'(\d+[A-Za-z]*)', normalized_meas)
+                if bust_match:
+                    bust_val = bust_match.group(1)
+                    if re.search(r'[A-Za-z]', bust_val):
+                        profile['bust'] = normalize_bust_size(bust_val)
+                    else:
+                        profile['bust'] = bust_val  # Just the number
 
-        waist_match = re.search(r'Waist[:\s]+(\d+)', text, re.IGNORECASE)
-        hips_match = re.search(r'Hips[:\s]+(\d+)', text, re.IGNORECASE)
+        # Fallback: build measurements from separate bust/waist/hips fields
+        if 'measurements' not in profile:
+            bust_val = stats.get('bust', '')
+            waist_val = stats.get('waist', '')
+            hips_val = stats.get('hips', '')
+            if bust_val and waist_val and hips_val:
+                profile['measurements'] = f"{bust_val}-{waist_val}-{hips_val}"
 
-        if bust_match and waist_match and hips_match:
-            bust = bust_match.group(1)
-            waist = waist_match.group(1)
-            hips = hips_match.group(1)
-            profile['measurements'] = f"{bust}-{waist}-{hips}"
+        # Extract bust if not already found
+        if 'bust' not in profile and 'bust' in stats:
+            bust_val = stats['bust']
+            if re.search(r'[A-Za-z]', bust_val):
+                profile['bust'] = normalize_bust_size(bust_val)
+            else:
+                profile['bust'] = bust_val  # Just the number
 
-        # Bust type - "Natural" or "Enhanced"
-        bust_type_match = re.search(r'Natural\s+or\s+Enhanced[:\s]+(Natural|Enhanced)', text, re.IGNORECASE)
-        if bust_type_match:
-            profile['bust_type'] = bust_type_match.group(1).title()
+        # Bust type - check various key formats
+        bust_type_key = next((k for k in stats if 'natural' in k.lower() or 'enhanced' in k.lower()), None)
+        if bust_type_key:
+            profile['bust_type'] = stats[bust_type_key].title()
 
-        # Hair color
-        hair_match = re.search(r'Hair(?:\s+Color)?[:\s]+([A-Za-z]+)', text, re.IGNORECASE)
-        if hair_match:
-            profile['hair_color'] = hair_match.group(1).title()
+        # Hair color - get full value
+        hair_key = next((k for k in stats if 'hair' in k.lower()), None)
+        if hair_key:
+            profile['hair_color'] = stats[hair_key].title()
 
-        # Eye color
-        eye_match = re.search(r'Eye(?:\s+Color)?[:\s]+([A-Za-z]+)', text, re.IGNORECASE)
-        if eye_match:
-            profile['eye_color'] = eye_match.group(1).title()
+        # Eye color - get full value
+        eye_key = next((k for k in stats if 'eye' in k.lower()), None)
+        if eye_key:
+            profile['eye_color'] = stats[eye_key].title()
 
-        # Background/Ethnicity
-        bg_match = re.search(r'Background[:\s]+([A-Za-z\s]+?)(?:\s*(?:Eye|Hair|Bust|Waist|Height|Weight|Natural|Tattoo|Age|Shoe)|$)', text, re.IGNORECASE)
-        if bg_match:
-            ethnicity = bg_match.group(1).strip()
-            if ethnicity and len(ethnicity) > 1:
-                profile['ethnicity'] = ethnicity.title()
+        # Background/Ethnicity - get full value
+        bg_key = next((k for k in stats if 'background' in k.lower()), None)
+        if bg_key:
+            profile['ethnicity'] = stats[bg_key].title()
+
+        # Fallback to text-based regex for fields not in dl/dt/dd
+        text = body.get_text(' ', strip=True) if body else ''
 
         # Get tier from page - look for Incall section with tier name
         tier_match = re.search(r'Incall\s*[-–]\s*(Blush|Rose|Rouge)', text, re.IGNORECASE)

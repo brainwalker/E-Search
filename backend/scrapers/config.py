@@ -61,7 +61,7 @@ SITES = {
         name='SelectCompanyEscorts',
         short_name='SELECT',
         schedule_url='https://www.selectcompanyescorts.com/schedule/',
-        base_url='https://www.selectcompanyescorts.com/toronto-escorts/',
+        base_url='https://www.selectcompanyescorts.com/toronto-companions/',
         image_base_url='https://www.selectcompanyescorts.com/wp-content/uploads/',
         scraper_type=ScraperType.STATIC,
         rate_limit_seconds=1.5,
@@ -162,7 +162,7 @@ SITES = {
         base_url='https://discreetdolls.com/',
         image_base_url='https://discreetdolls.com/wp-content/uploads/',
         scraper_type=ScraperType.STEALTH,
-        rate_limit_seconds=3.0,
+        rate_limit_seconds=5.0,  # Increased from 3.0 to avoid 403 rate limiting
         enabled=True,
     ),
 
@@ -170,10 +170,11 @@ SITES = {
         name='HiddenGemEscorts',
         short_name='HGE',
         schedule_url='https://hiddengemescorts.ca/toronto-escorts-schedule/',
-        base_url='https://hiddengemescorts.ca/',
+        base_url='https://hiddengemescorts.ca/gem/',
+        image_base_url='https://hiddengemescorts.ca/wp-content/uploads/',
         scraper_type=ScraperType.STEALTH,
         rate_limit_seconds=3.0,
-        enabled=False,
+        enabled=True,
     ),
 
     'torontogf': SiteConfig(

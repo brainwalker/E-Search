@@ -19,6 +19,7 @@ from bs4 import BeautifulSoup
 from ..base import BaseScraper, ScheduleItem
 from ..config import get_site_config
 from ..crawlers.stealth import StealthCrawler
+from ..crawlers.crawlee_stealth import CrawleeStealth
 from ..utils.normalizers import (
     normalize_name,
     normalize_weight,
@@ -213,20 +214,36 @@ class DDScraper(BaseScraper):
     - Profile pages: `.doll-table-info` for stats, `.rightside` for images
     """
 
-    def __init__(self, db_session=None):
+    def __init__(self, db_session=None, use_crawlee: bool = True):
         config = get_site_config('discreet')
         super().__init__(config, db_session)
-        self.crawler = StealthCrawler(
-            rate_limit=config.rate_limit_seconds,  # Use config value (3.0s) to avoid rate limiting
-            headless=True,
-            reuse_page=True,  # Reuse browser page for speed
-            timeout=20.0,
-            max_retries=3  # More retries for 403 errors
-        )
-        self._crawler_initialized = False
+        self.use_crawlee = use_crawlee
+
+        if use_crawlee:
+            # Use Crawlee with fingerprint rotation - faster and better anti-detection
+            self.crawler = CrawleeStealth(
+                rate_limit=2.0,  # Crawlee can go faster with fingerprint rotation
+                headless=True,
+                max_retries=3
+            )
+            self._crawler_initialized = True  # Crawlee initializes on demand
+        else:
+            # Fallback to original Playwright-based stealth crawler
+            self.crawler = StealthCrawler(
+                rate_limit=config.rate_limit_seconds,
+                headless=True,
+                reuse_page=True,
+                timeout=20.0,
+                max_retries=3
+            )
+            self._crawler_initialized = False
 
     async def _ensure_crawler(self):
         """Ensure crawler is initialized."""
+        if self.use_crawlee:
+            # Crawlee initializes on demand, nothing to do
+            return
+
         if not self._crawler_initialized:
             try:
                 await self.crawler._init_browser()
@@ -463,129 +480,128 @@ class DDScraper(BaseScraper):
         stats_table = soup.find('div', class_='doll-table-info')
 
         if stats_table:
-            # Extract stats from table rows
-            text = stats_table.get_text(' ', strip=True)
-            self.logger.debug(f"Stats table text for {profile_slug}: {text[:200]}...")
+            # Parse structured HTML: <p><strong>Label:</strong> Value</p>
+            stats = {}
+            for p in stats_table.find_all('p'):
+                strong = p.find('strong')
+                if strong:
+                    # Get label from strong tag, strip colon
+                    label = strong.get_text(strip=True).rstrip(':').lower()
+                    # Get value - everything after the strong tag
+                    strong.extract()  # Remove strong from p
+                    value = p.get_text(strip=True)
+                    if value:
+                        stats[label] = value
 
-            # Age
-            age_match = re.search(r'Age[:\s]+(\d+)', text, re.IGNORECASE)
-            if age_match:
-                profile['age'] = int(age_match.group(1))
+            self.logger.debug(f"Parsed stats for {profile_slug}: {stats}")
 
-            # Height - handle various formats
-            height_match = re.search(
-                r'Height[:\s]+(\d+[\'\u2019\u2032]?\s*\d*[\"\u2033]?|\d+\s*cm)',
-                text, re.IGNORECASE
-            )
-            if height_match:
-                profile['height'] = normalize_height(height_match.group(1))
+            # Extract fields from parsed stats
+            if 'age' in stats:
+                try:
+                    profile['age'] = int(re.search(r'\d+', stats['age']).group())
+                except (ValueError, AttributeError):
+                    pass
 
-            # Weight
-            weight_match = re.search(r'Weight[:\s]+(\d+\s*(?:lbs?|kg)?)', text, re.IGNORECASE)
-            if weight_match:
-                profile['weight'] = normalize_weight(weight_match.group(1))
+            if 'height' in stats:
+                profile['height'] = normalize_height(stats['height'])
 
-            # Bust - try multiple patterns
-            bust_match = re.search(r'Bust[:\s]+(\d+\s*[A-Za-z]+)', text, re.IGNORECASE)
-            if bust_match:
-                profile['bust'] = normalize_bust_size(bust_match.group(1))
+            if 'weight' in stats:
+                profile['weight'] = normalize_weight(stats['weight'])
 
-            # Figure/Measurements - handle multiple formats:
-            # "Figure: 34H" (bust only with cup)
-            # "Figure: 36C–25–36" (full measurements with en-dash/em-dash and cup)
-            # "Figure: 32D-24-36" (full measurements with hyphen and cup)
-            # "Figure: 35-27-36" (full measurements without cup letter)
-            figure_match = re.search(
-                r'(?:Figure|Measurements?)[:\s]+(\d+[A-Za-z]*(?:\s*[–—\-/]\s*\d+\s*[–—\-/]\s*\d+)?)',
-                text, re.IGNORECASE
-            )
-            if figure_match:
-                figure_value = figure_match.group(1).strip()
-                # Check if it's just bust size (e.g., "34H") or full measurements
+            if 'bust' in stats:
+                profile['bust'] = normalize_bust_size(stats['bust'])
+
+            # Figure/Measurements - full value like "32D-24-36"
+            if 'figure' in stats:
+                figure_value = stats['figure'].replace('–', '-').replace('—', '-')
+                # Check if it's just bust size or full measurements
                 if re.match(r'^\d+[A-Za-z]+$', figure_value):
-                    # Just bust size with cup letter - extract and set bust if not already found
+                    # Just bust size with cup letter
                     if not profile.get('bust'):
                         profile['bust'] = normalize_bust_size(figure_value)
-                elif re.match(r'^\d+$', figure_value):
-                    # Just a number (rare, skip)
-                    pass
-                else:
-                    # Full measurements - normalize and set
-                    # Replace en-dash/em-dash with hyphen for normalization
-                    measurements = figure_value.replace('–', '-').replace('—', '-')
-                    measurements = normalize_measurements(measurements)
-                    profile['measurements'] = measurements
-                    # Also extract bust from figure if not already found
-                    if not profile.get('bust'):
-                        # Try with cup letter first (e.g., "34DD-26-36")
-                        bust_from_fig = re.match(r'(\d+[A-Za-z]+)', measurements)
-                        if bust_from_fig:
-                            profile['bust'] = normalize_bust_size(bust_from_fig.group(1))
-                        else:
-                            # No cup letter, just use the number (e.g., "35-27-36" -> "35")
-                            bust_num = re.match(r'(\d+)', measurements)
-                            if bust_num:
-                                profile['bust'] = bust_num.group(1)
+                elif '-' in figure_value or '/' in figure_value:
+                    # Full measurements (handles "A28/24/34" -> "28A-24-34")
+                    normalized_meas = normalize_measurements(figure_value)
+                    profile['measurements'] = normalized_meas
+                    # Extract bust from normalized measurements
+                    if not profile.get('bust') and normalized_meas:
+                        bust_match = re.match(r'(\d+[A-Za-z]*)', normalized_meas)
+                        if bust_match:
+                            bust_val = bust_match.group(1)
+                            if re.search(r'[A-Za-z]', bust_val):
+                                profile['bust'] = normalize_bust_size(bust_val)
+                            else:
+                                profile['bust'] = bust_val
 
-            # Nationality - handle patterns like "Nationality: European" or "Nationality: Spanish & Columbian"
-            nat_match = re.search(r'Nationality[:\s]+([A-Za-z\s/&-]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
-            if nat_match:
-                nationality = nat_match.group(1).strip()
-                # Clean up and validate
-                if nationality and len(nationality) > 1:
-                    profile['nationality'] = nationality.title()
+            # Nationality - full value
+            if 'nationality' in stats:
+                profile['nationality'] = stats['nationality'].title()
 
-            # Ethnicity - handle patterns like:
-            # "Ethnicity: Caucasian"
-            # "Ethnicity: Middle Eastern"
-            # "Ethnicity: Caucasian (Irish, British, German)"
-            # "Ethnicity: Caucasian (French/Scottish)"
-            # Stop before next field label like "Nationality:"
-            eth_match = re.search(
-                r'Ethnicity[:\s]+(.+?)(?:\s+(?:Nationality|Hair|Eye|Height|Weight|Age|Figure|Bust|Service)[:\s]|$)',
-                text, re.IGNORECASE
-            )
-            if eth_match:
-                ethnicity = eth_match.group(1).strip()
-                ethnicity = ethnicity.strip().rstrip('.,;:')
-                if ethnicity and len(ethnicity) > 1:
-                    profile['ethnicity'] = ethnicity.title()
+            # Ethnicity - full value (handles "Middle Eastern", "Caucasian (Irish, British)")
+            if 'ethnicity' in stats:
+                profile['ethnicity'] = stats['ethnicity'].title()
 
-            # Hair color
-            hair_match = re.search(r'Hair[:\s]+([A-Za-z\s/]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
-            if hair_match:
-                hair = hair_match.group(1).strip()
-                if hair and len(hair) > 1:
-                    profile['hair_color'] = hair.title()
+            # Hair color - full value (handles "Blonde with highlights")
+            if 'hair' in stats:
+                profile['hair_color'] = stats['hair'].title()
 
-            # Eye color
-            eye_match = re.search(r'Eyes?[:\s]+([A-Za-z\s/]+?)(?:\s+[A-Z][a-z]+:|$)', text, re.IGNORECASE)
-            if eye_match:
-                eyes = eye_match.group(1).strip()
-                if eyes and len(eyes) > 1:
-                    profile['eye_color'] = eyes.title()
+            # Eye color - full value
+            if 'eyes' in stats:
+                profile['eye_color'] = stats['eyes'].title()
 
-            # Breast type (Natural/Enhanced)
-            if 'natural' in text.lower():
+            # Bust type - Enhanced: Yes/No
+            if 'enhanced' in stats:
+                enhanced_val = stats['enhanced'].lower()
+                if enhanced_val in ('yes', 'true', '1'):
+                    profile['bust_type'] = 'Enhanced'
+                elif enhanced_val in ('no', 'false', '0'):
+                    profile['bust_type'] = 'Natural'
+            elif 'natural' in stats:
                 profile['bust_type'] = 'Natural'
-            elif 'enhanced' in text.lower():
-                profile['bust_type'] = 'Enhanced'
 
-        # Extract tier from page - look for tier badges/labels
+        # Extract tier from page - DD shows tier in various places
         # DD tiers: Doll, Diamond Doll, Platinum Doll, Sapphire Doll
-        page_text = soup.get_text(' ', strip=True).lower()
-        if 'sapphire doll' in page_text or 'sapphire' in page_text:
-            profile['tier'] = 'Sapphire Doll'
-        elif 'platinum doll' in page_text or 'platinum' in page_text:
-            profile['tier'] = 'Platinum Doll'
-        elif 'diamond doll' in page_text or 'diamond' in page_text:
-            profile['tier'] = 'Diamond Doll'
-        elif 'doll' in page_text:
-            # Check for just "Doll" tier (base tier) - but be careful not to match site name
-            # Look for tier-specific elements
-            tier_elem = soup.find(class_=re.compile(r'tier|badge|rank|level', re.IGNORECASE))
-            if tier_elem and 'doll' in tier_elem.get_text(strip=True).lower():
-                profile['tier'] = 'Doll'
+        #
+        # Strategy: Search the whole page for tier keywords, but be careful
+        # to avoid false positives from "DiscreetDolls" site name
+
+        # First check for tier-specific CSS classes that DD might use
+        tier_classes = soup.find_all(class_=re.compile(r'sapphire|platinum|diamond|doll-tier|member-tier', re.IGNORECASE))
+        for elem in tier_classes:
+            class_str = ' '.join(elem.get('class', []))
+            if 'sapphire' in class_str.lower():
+                profile['tier'] = 'Sapphire Doll'
+                break
+            elif 'platinum' in class_str.lower():
+                profile['tier'] = 'Platinum Doll'
+                break
+            elif 'diamond' in class_str.lower():
+                profile['tier'] = 'Diamond Doll'
+                break
+
+        # If not found via classes, search page text
+        if not profile.get('tier'):
+            # Get text from likely tier areas first, then full page as fallback
+            tier_search_areas = []
+            if stats_table:
+                tier_search_areas.append(stats_table.get_text(' ', strip=True))
+            header_area = soup.find('div', class_='leftside') or soup.find('div', class_='doll-header')
+            if header_area:
+                tier_search_areas.append(header_area.get_text(' ', strip=True))
+            # Also check the full page but filter out navigation/footer
+            main_content = soup.find('main') or soup.find('article') or soup.find('div', class_='content')
+            if main_content:
+                tier_search_areas.append(main_content.get_text(' ', strip=True))
+
+            tier_text = ' '.join(tier_search_areas).lower()
+
+            # Look for explicit tier mentions (avoid "DiscreetDolls")
+            if 'sapphire doll' in tier_text or re.search(r'\bsapphire\b', tier_text):
+                profile['tier'] = 'Sapphire Doll'
+            elif 'platinum doll' in tier_text or re.search(r'\bplatinum\b', tier_text):
+                profile['tier'] = 'Platinum Doll'
+            elif 'diamond doll' in tier_text or re.search(r'\bdiamond\b', tier_text):
+                profile['tier'] = 'Diamond Doll'
 
         # Extract service type from right side div - "Service Details: GFE" or "Service Details:GFE & PSE"
         right_div = soup.find('div', class_='right')

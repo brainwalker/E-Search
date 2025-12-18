@@ -37,7 +37,9 @@
       "Bash(. .venv/bin/activate)",
       "Bash(git -C /Users/shah/E-Search diff HEAD -- frontend/index.html)",
       "Bash(git -C /Users/shah/E-Search log --oneline -5)",
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "Bash(cd:*)",
+      "Bash(playwright install:*)"
     ],
     "deny": [],
     "ask": []

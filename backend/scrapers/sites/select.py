@@ -106,7 +106,15 @@ class SelectScraper(BaseScraper):
     Site structure:
     - Schedule page: Table with escort names in first column, days as column headers
     - Profile pages: Stats section with age/height/weight/measurements, pricing info
+
+    Note: Select doesn't list nationality, service_type, or tags on profiles.
     """
+
+    # Fields available on Select profiles (no nationality, service_type, tags)
+    expected_fields = [
+        'age', 'ethnicity', 'height', 'weight', 'bust', 'bust_type',
+        'measurements', 'hair_color', 'eye_color', 'tier', 'images', 'schedules'
+    ]
 
     def __init__(self, db_session=None):
         config = get_site_config('select')
@@ -132,8 +140,11 @@ class SelectScraper(BaseScraper):
         """Parse the schedule page HTML to extract escorts and their schedules."""
         items = []
 
-        # Find the schedule table
-        table = soup.find('table')
+        # Find the schedule table by ID
+        table = soup.find('table', id='escort-schedule')
+        if not table:
+            # Fallback to any table
+            table = soup.find('table')
         if not table:
             self.logger.warning("No schedule table found")
             return items
@@ -228,7 +239,8 @@ class SelectScraper(BaseScraper):
         Returns:
             Dictionary of profile data including stats
         """
-        full_url = f"{self.config.base_url}{profile_url}/"
+        # Profile slugs should be lowercase for /toronto-companions/ URLs
+        full_url = f"{self.config.base_url}{profile_url.lower()}/"
         self.logger.debug(f"Fetching profile: {full_url}")
 
         soup = await self.crawler.fetch_soup(full_url)
@@ -254,73 +266,81 @@ class SelectScraper(BaseScraper):
             if h1:
                 profile['name'] = h1.get_text(strip=True)
 
-        # Get page text for regex parsing
-        # Look for stats in product description or summary
-        text_containers = soup.find_all(['div', 'p'], class_=re.compile(r'description|summary|entry-content'))
-        text = ' '.join(c.get_text(' ', strip=True) for c in text_containers)
+        # Parse structured HTML: <table class="shop_attributes">
+        # Each row: <tr><th>Label</th><td>Value</td></tr>
+        stats = {}
+        shop_table = soup.find('table', class_='shop_attributes')
+        if shop_table:
+            for row in shop_table.find_all('tr'):
+                th = row.find('th')
+                td = row.find('td')
+                if th and td:
+                    label = th.get_text(strip=True).lower().rstrip(':')
+                    value = td.get_text(strip=True)
+                    if value:
+                        stats[label] = value
 
-        if not text:
-            # Fallback: get all text from body
-            body = soup.find('body')
-            if body:
-                text = body.get_text(' ', strip=True)
+            self.logger.debug(f"Parsed stats for {profile_slug}: {stats}")
 
+        # Extract fields from parsed stats
         # Age
-        age_match = re.search(r'Age[:\s]+(\d+)', text, re.IGNORECASE)
-        if age_match:
+        age_key = next((k for k in stats if 'age' in k), None)
+        if age_key:
             try:
-                profile['age'] = int(age_match.group(1))
-            except ValueError:
+                profile['age'] = int(re.search(r'\d+', stats[age_key]).group())
+            except (ValueError, AttributeError):
                 pass
 
-        # Height - "5'8"" or "5'8" or "5ft 8in"
-        height_match = re.search(r'Height[:\s]+([\d\'"\s]+(?:ft|in)?)', text, re.IGNORECASE)
-        if height_match:
-            profile['height'] = normalize_height(height_match.group(1))
+        # Height - full value like "5'8""
+        height_key = next((k for k in stats if 'height' in k), None)
+        if height_key:
+            profile['height'] = normalize_height(stats[height_key])
 
-        # Weight - "130lbs" or "130 lbs"
-        weight_match = re.search(r'Weight[:\s]+(\d+\s*(?:lbs?|kg)?)', text, re.IGNORECASE)
-        if weight_match:
-            profile['weight'] = normalize_weight(weight_match.group(1))
+        # Weight - full value like "130 lbs"
+        weight_key = next((k for k in stats if 'weight' in k), None)
+        if weight_key:
+            profile['weight'] = normalize_weight(stats[weight_key])
 
-        # Measurements - "34C 26 36" or "34C-26-36"
-        meas_match = re.search(r'Measurements?[:\s]+(\d+[A-Z]+[\s\-]+\d+[\s\-]+\d+)', text, re.IGNORECASE)
-        if meas_match:
-            profile['measurements'] = normalize_measurements(meas_match.group(1))
-            # Extract bust
-            bust_match = re.match(r'(\d+[A-Z]+)', meas_match.group(1), re.IGNORECASE)
-            if bust_match:
-                profile['bust'] = normalize_bust_size(bust_match.group(1))
+        # Measurements - full value like "34C-26-36", "32-24-36", or "A28/24/34"
+        meas_key = next((k for k in stats if 'measurement' in k), None)
+        if meas_key:
+            normalized_meas = normalize_measurements(stats[meas_key])
+            profile['measurements'] = normalized_meas
+            # Extract bust from normalized measurements (handles "A28/24/34" -> "28A-24-34")
+            if normalized_meas:
+                bust_match = re.match(r'(\d+[A-Za-z]*)', normalized_meas)
+                if bust_match:
+                    bust_val = bust_match.group(1)
+                    if re.search(r'[A-Za-z]', bust_val):
+                        profile['bust'] = normalize_bust_size(bust_val)
+                    else:
+                        profile['bust'] = bust_val  # Just the number
 
-        # Also try to get bust from standalone pattern if not found
+        # Bust (standalone) if not found in measurements
         if 'bust' not in profile:
-            bust_match = re.search(r'(?:Bust|Figure)[:\s]+(\d+[A-Z]+)', text, re.IGNORECASE)
-            if bust_match:
-                profile['bust'] = normalize_bust_size(bust_match.group(1))
+            bust_key = next((k for k in stats if 'bust' in k or 'figure' in k), None)
+            if bust_key:
+                profile['bust'] = normalize_bust_size(stats[bust_key])
 
-        # Bust type - "Breasts: Natural" or "Breasts: Enhanced"
-        # Handle whitespace-heavy HTML format
-        bust_type_match = re.search(r'Breasts\s+(Natural|Enhanced)', text, re.IGNORECASE)
-        if bust_type_match:
-            profile['bust_type'] = bust_type_match.group(1).title()
+        # Bust type - "Natural" or "Enhanced"
+        bust_type_key = next((k for k in stats if 'breast' in k), None)
+        if bust_type_key:
+            profile['bust_type'] = stats[bust_type_key].title()
 
-        # Hair color
-        hair_match = re.search(r'Hair[:\s]+([A-Za-z]+)', text, re.IGNORECASE)
-        if hair_match:
-            profile['hair_color'] = hair_match.group(1).title()
+        # Hair color - full value (handles "Blonde with highlights")
+        hair_key = next((k for k in stats if 'hair' in k), None)
+        if hair_key:
+            profile['hair_color'] = stats[hair_key].title()
 
-        # Eye color
-        eye_match = re.search(r'Eyes?[:\s]+([A-Za-z]+)', text, re.IGNORECASE)
-        if eye_match:
-            profile['eye_color'] = eye_match.group(1).title()
+        # Eye color - full value
+        eye_key = next((k for k in stats if 'eye' in k), None)
+        if eye_key:
+            profile['eye_color'] = stats[eye_key].title()
 
-        # Background/Ethnicity - "Latina", "Russian Canadian", etc.
-        # Handle whitespace-heavy HTML by looking for text between "Background" and next label
-        bg_match = re.search(r'Background\s+([A-Za-z][A-Za-z\s,]*[A-Za-z])\s*(?:Breasts|Age|Height|Weight|Measurement|Hair|Eyes|$)', text, re.IGNORECASE)
-        if bg_match:
-            ethnicity = ' '.join(bg_match.group(1).split())  # Normalize whitespace
-            if ethnicity and len(ethnicity) > 1:
-                profile['ethnicity'] = ethnicity.title()
+        # Background/Ethnicity - full value (handles "Russian Canadian", "Latina, Colombian")
+        bg_key = next((k for k in stats if 'background' in k or 'ethnicity' in k), None)
+        if bg_key:
+            profile['ethnicity'] = stats[bg_key].title()
 
         # Images - look for product images
         images = self._extract_images(soup)

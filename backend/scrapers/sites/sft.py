@@ -257,10 +257,18 @@ class SFTScraper(BaseScraper):
 
     def _parse_profile(self, soup: BeautifulSoup, profile_slug: str = "") -> Dict[str, Any]:
         """Parse profile page HTML."""
-        content = soup.find('div', class_='content') or soup.find('body') or soup
-        text = content.get_text()
-
         profile = {}
+
+        # Stats are in article.text-peach element
+        stats_element = soup.find('article', class_='text-peach')
+        if stats_element:
+            text = stats_element.get_text()
+        else:
+            # Fallback to content div or body
+            content = soup.find('div', class_='content') or soup.find('body') or soup
+            text = content.get_text()
+
+        self.logger.debug(f"Stats text for {profile_slug}: {text[:500] if text else 'empty'}...")
 
         # Age
         age = extract_age(text)

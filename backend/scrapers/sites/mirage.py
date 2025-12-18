@@ -139,7 +139,15 @@ class MirageScraper(BaseScraper):
     Site structure:
     - Schedule page: Grid of escort cards with profile links
     - Profile pages: Stats in <dt>/<dd> format, schedule table with day/location availability
+
+    Note: Mirage doesn't list ethnicity, service_type, or tags on profiles.
     """
+
+    # Fields available on Mirage profiles (no ethnicity, service_type, tags)
+    expected_fields = [
+        'age', 'nationality', 'height', 'weight', 'bust', 'bust_type',
+        'measurements', 'hair_color', 'eye_color', 'tier', 'images', 'schedules'
+    ]
 
     def __init__(self, db_session=None):
         config = get_site_config('mirage')
@@ -301,71 +309,152 @@ class MirageScraper(BaseScraper):
         profile['tier'] = parse_mirage_tier(title)
         profile['name'] = parse_mirage_name(title)
 
-        # Parse stats from <dt>/<dd> pairs
-        for dt in soup.find_all('dt'):
-            label = dt.get_text(strip=True).lower().rstrip(':')
-            dd = dt.find_next_sibling('dd')
+        # Parse all <dt>/<dd> pairs into stats dict first
+        # This captures full values like "Blonde with highlights", "Canadian, European"
+        # Look specifically in the meta-group container to avoid picking up other dt/dd on page
+        stats = {}
+        meta_group = soup.find('div', class_='tribe-events-meta-group-other')
+        if not meta_group:
+            # Fallback to any dl element
+            meta_group = soup.find('dl')
+        if not meta_group:
+            # Last resort: search whole page
+            meta_group = soup
+
+        for dt in meta_group.find_all('dt'):
+            # Get only direct text content of dt (not nested elements)
+            # This handles malformed HTML where dd is nested inside dt
+            label_parts = []
+            for child in dt.children:
+                if isinstance(child, str):
+                    text = child.strip()
+                    if text:
+                        label_parts.append(text)
+                elif child.name and child.name != 'dd':
+                    # Include text from non-dd child elements
+                    text = child.get_text(strip=True)
+                    if text:
+                        label_parts.append(text)
+
+            label = ' '.join(label_parts).lower().rstrip(':').strip()
+            if not label:
+                continue
+
+            # First check if dd is nested inside dt (malformed HTML)
+            dd = dt.find('dd')
             if not dd:
-                # Try next element
+                # Try sibling
+                dd = dt.find_next_sibling('dd')
+            if not dd:
+                # Last resort: next dd in document order
                 dd = dt.find_next('dd')
+
             if dd:
                 value = dd.get_text(strip=True)
+                if value:
+                    stats[label] = value
 
-                if 'age' in label and value:
-                    try:
-                        profile['age'] = int(re.search(r'\d+', value).group())
-                    except (ValueError, AttributeError):
-                        pass
+        self.logger.debug(f"Parsed stats for {profile_slug}: {stats}")
 
-                elif 'height' in label and value:
-                    profile['height'] = normalize_height(value)
+        # Helper to find shortest matching key (handles malformed HTML where keys get concatenated)
+        def find_key(search_term, exact=False):
+            if exact:
+                return search_term if search_term in stats else None
+            matches = [k for k in stats if search_term in k]
+            if not matches:
+                return None
+            # Return shortest match to avoid malformed concatenated keys
+            return min(matches, key=len)
 
-                elif 'weight' in label and value:
-                    profile['weight'] = normalize_weight(value)
+        # Extract fields from parsed stats
+        # Age
+        age_key = find_key('age')
+        if age_key:
+            try:
+                profile['age'] = int(re.search(r'\d+', stats[age_key]).group())
+            except (ValueError, AttributeError):
+                pass
 
-                elif 'measurement' in label and value:
-                    # Extract bust_type from "(Natural)" or "(Enhanced)" suffix
-                    bust_type_match = re.search(r'\((Natural|Enhanced)\)', value, re.IGNORECASE)
-                    if bust_type_match:
-                        profile['bust_type'] = bust_type_match.group(1).title()
-                        # Remove bust_type from measurement string before normalizing
-                        clean_value = re.sub(r'\s*\((?:Natural|Enhanced)\)', '', value, flags=re.IGNORECASE)
+        # Height
+        height_key = find_key('height')
+        if height_key:
+            profile['height'] = normalize_height(stats[height_key])
+
+        # Weight
+        weight_key = find_key('weight')
+        if weight_key:
+            profile['weight'] = normalize_weight(stats[weight_key])
+
+        # Measurements - full value like "34B-26-35 (Natural)"
+        meas_key = find_key('measurement')
+        if meas_key:
+            value = stats[meas_key]
+            # Extract bust_type from "(Natural)" or "(Enhanced)" suffix
+            bust_type_match = re.search(r'\((Natural|Enhanced)\)', value, re.IGNORECASE)
+            if bust_type_match:
+                profile['bust_type'] = bust_type_match.group(1).title()
+                # Remove bust_type from measurement string before normalizing
+                clean_value = re.sub(r'\s*\((?:Natural|Enhanced)\)', '', value, flags=re.IGNORECASE)
+            else:
+                clean_value = value
+
+            normalized_meas = normalize_measurements(clean_value)
+            profile['measurements'] = normalized_meas
+            # Extract bust from normalized measurements (handles "A28/24/34" -> "28A-24-34")
+            if normalized_meas:
+                bust_match = re.match(r'(\d+[A-Za-z]*)', normalized_meas)
+                if bust_match:
+                    bust_val = bust_match.group(1)
+                    if re.search(r'[A-Za-z]', bust_val):
+                        profile['bust'] = normalize_bust_size(bust_val)
                     else:
-                        clean_value = value
-                    
-                    profile['measurements'] = normalize_measurements(clean_value)
-                    # Extract bust from measurements
-                    bust_match = re.match(r'(\d+[A-Z]+)', clean_value, re.IGNORECASE)
-                    if bust_match:
-                        profile['bust'] = normalize_bust_size(bust_match.group(1))
+                        profile['bust'] = bust_val  # Just the number
 
-                elif 'hair' in label and value:
-                    profile['hair_color'] = value.title()
+        # Hair color - full value (handles "Blonde with highlights")
+        hair_key = find_key('hair')
+        if hair_key:
+            profile['hair_color'] = stats[hair_key].title()
 
-                elif 'eye' in label and value:
-                    profile['eye_color'] = value.title()
+        # Eye color - full value
+        eye_key = find_key('eye')
+        if eye_key:
+            profile['eye_color'] = stats[eye_key].title()
 
-                elif 'nationality' in label and value:
-                    profile['nationality'] = value.title()
+        # Nationality - full value (handles "Canadian, European")
+        nat_key = find_key('nationality')
+        if nat_key:
+            profile['nationality'] = stats[nat_key].title()
 
-                elif 'in call' in label or 'incall' in label:
-                    # Parse pricing
-                    incall_30, incall_45, incall_1hr, min_book = parse_mirage_pricing(value)
-                    if incall_30:
-                        profile['incall_30min'] = incall_30
-                    if incall_45:
-                        profile['incall_45min'] = incall_45
-                    if incall_1hr:
-                        profile['incall_1hr'] = incall_1hr
-                    if min_book:
-                        profile['min_booking'] = min_book
+        # Type/Tier from stats (e.g., "Platinum VIP Companion")
+        type_key = find_key('type', exact=True)
+        if type_key:
+            type_val = stats[type_key].upper()
+            if 'PLATINUM' in type_val:
+                profile['tier'] = 'Platinum VIP'
+            elif 'VIP' in type_val:
+                profile['tier'] = 'VIP'
 
-                elif 'out call' in label or 'outcall' in label:
-                    if value and value.upper() != 'N/A':
-                        # Parse outcall pricing if available
-                        match = re.search(r'\$(\d+)', value)
-                        if match:
-                            profile['outcall_1hr'] = f"${match.group(1)}"
+        # In Call pricing
+        incall_key = find_key('in call') or find_key('incall')
+        if incall_key:
+            incall_30, incall_45, incall_1hr, min_book = parse_mirage_pricing(stats[incall_key])
+            if incall_30:
+                profile['incall_30min'] = incall_30
+            if incall_45:
+                profile['incall_45min'] = incall_45
+            if incall_1hr:
+                profile['incall_1hr'] = incall_1hr
+            if min_book:
+                profile['min_booking'] = min_book
+
+        # Out Call pricing
+        outcall_key = find_key('out call') or find_key('outcall')
+        if outcall_key:
+            value = stats[outcall_key]
+            if value and value.upper() != 'N/A':
+                match = re.search(r'\$(\d+)', value)
+                if match:
+                    profile['outcall_1hr'] = f"${match.group(1)}"
 
         # Parse schedule table
         schedules = self._parse_schedule_table(soup)

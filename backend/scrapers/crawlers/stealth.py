@@ -59,12 +59,13 @@ class StealthCrawler:
         self._request_count = 0  # Track requests for periodic browser refresh
 
     async def _wait_for_rate_limit(self):
-        """Wait to respect rate limit with some randomization."""
+        """Wait to respect rate limit with randomization to appear human-like."""
         import time
         now = time.time()
         elapsed = now - self._last_request_time
-        # Add small random delay to appear more human-like (reduced randomization)
-        wait_time = self.rate_limit - elapsed + random.uniform(0, 0.3)
+        # Add random delay (0.5-2.0s extra) to appear more human-like
+        random_delay = random.uniform(0.5, 2.0)
+        wait_time = self.rate_limit - elapsed + random_delay
         if wait_time > 0:
             await asyncio.sleep(wait_time)
         self._last_request_time = time.time()

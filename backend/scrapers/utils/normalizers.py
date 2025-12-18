@@ -143,11 +143,22 @@ def normalize_measurements(measurements_text: str) -> Optional[str]:
         34DD- 26-36 -> 34DD-26-36
         34C2636 -> 34C-26-36
         32D-23- 35 -> 32D-23-35
+        A28/24/34 -> 28A-24-34 (cup letter prefix)
+        B32-25-35 -> 32B-25-35 (cup letter prefix)
     """
     if not measurements_text:
         return None
 
     measurements = measurements_text.strip()
+
+    # Handle cup letter prefix format: A28/24/34 or B32-25-35 -> 28A-24-34
+    prefix_match = re.match(r'^([A-Za-z]+)(\d+)[/\-](\d+)[/\-](\d+)$', measurements)
+    if prefix_match:
+        cup = prefix_match.group(1).upper()
+        bust_num = prefix_match.group(2)
+        waist = prefix_match.group(3)
+        hip = prefix_match.group(4)
+        return f"{bust_num}{cup}-{waist}-{hip}"
 
     # Replace slashes and en-dash/em-dash with hyphens
     measurements = measurements.replace('/', '-')
