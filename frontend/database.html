@@ -1712,6 +1712,7 @@
 
         // Search state
         let nameSearchQuery = '';
+        let sourceFilter = '';  // Filter by source_id
         let searchDebounceTimer = null;
 
         // Selection state
@@ -3070,19 +3071,20 @@
                 formattedLine = line.replace(timestampPattern, '');
             }
 
-            // Check for HTTP request pattern (e.g., "INFO:     127.0.0.1:49966 - "GET /db/table/listings HTTP/1.1" 200 OK")
-            const httpPattern = /^INFO:\s+[\d.:]+\s+-\s+"(GET|POST|PUT|DELETE|PATCH)\s+([^"]+)\s+HTTP\/[\d.]+"\s+(\d+)\s+(\w+)$/;
+            // Check for HTTP request pattern
+            // Matches: "INFO:     127.0.0.1:49966 - "GET /path HTTP/1.1" 200 OK"
+            // Or:      "127.0.0.1:52167 - "GET /path HTTP/1.1" 200"
+            const httpPattern = /^(?:INFO:\s+)?[\d.:]+\s+-\s+"(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\s+([^"]+)\s+HTTP\/[\d.]+"\s+(\d+)(?:\s+\w+)?$/;
             const httpMatch = formattedLine.match(httpPattern);
 
             if (httpMatch) {
                 const method = httpMatch[1];
                 const path = httpMatch[2];
                 const statusCode = parseInt(httpMatch[3]);
-                const statusText = httpMatch[4];
 
                 className = 'http-request';
                 const statusClass = statusCode >= 400 ? 'http-status-error' : 'http-status-ok';
-                formattedLine = `<span class="http-method">${method}</span> ${escapeHtml(path)} <span class="${statusClass}">${statusCode} ${statusText}</span>`;
+                formattedLine = `<span class="http-method">${method}</span> ${escapeHtml(path)} <span class="${statusClass}">${statusCode}</span>`;
                 return `<div class="log-line ${className}">${timePrefix}${formattedLine}</div>`;
             }
 

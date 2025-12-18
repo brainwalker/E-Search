@@ -73,7 +73,7 @@ logger = logging.getLogger(__name__)
 # Filter to suppress noisy polling endpoint access logs
 class PollingEndpointFilter(logging.Filter):
     # Endpoints that poll frequently and clutter logs
-    SUPPRESSED_ENDPOINTS = ['/db/logs', '/api/sources']
+    SUPPRESSED_ENDPOINTS = ['/db/logs', '/api/sources', '/db/stats']
     
     def filter(self, record):
         try:
@@ -86,9 +86,9 @@ class PollingEndpointFilter(logging.Filter):
                 return False
         return True
 
-# Apply filter to uvicorn access logger at module load time
-uvicorn_access_logger = logging.getLogger("uvicorn.access")
-uvicorn_access_logger.addFilter(PollingEndpointFilter())
+# NOTE: Backend filtering disabled - let frontend handle HTTP log filtering
+# uvicorn_access_logger = logging.getLogger("uvicorn.access")
+# uvicorn_access_logger.addFilter(PollingEndpointFilter())
 
 
 # Global shutdown event
@@ -831,12 +831,14 @@ async def debug_listing_extraction(listing_id: int, db: Session = Depends(get_db
         'SELECT': 'select',
         'SECRET': 'secret',
         'HGE': 'hiddengem',
+        'TDL': 'topdrawer',
         'SexyFriendsToronto': 'sft',  # Legacy support
         'DiscreetDolls': 'discreet',  # Legacy support
         'MirageEntertainment': 'mirage',  # Legacy support
         'SelectCompanyEscorts': 'select',  # Legacy support
         'SecretEscorts': 'secret',  # Legacy support
         'HiddenGemEscorts': 'hiddengem',  # Legacy support
+        'TopDrawerLadies': 'topdrawer',  # Legacy support
     }
 
     # Try exact match first, then case-insensitive
@@ -984,12 +986,14 @@ async def refresh_listing(listing_id: int, db: Session = Depends(get_db)):
         'SELECT': 'select',
         'SECRET': 'secret',
         'HGE': 'hiddengem',
+        'TDL': 'topdrawer',
         'SexyFriendsToronto': 'sft',  # Legacy support
         'DiscreetDolls': 'discreet',  # Legacy support
         'MirageEntertainment': 'mirage',  # Legacy support
         'SelectCompanyEscorts': 'select',  # Legacy support
         'SecretEscorts': 'secret',  # Legacy support
         'HiddenGemEscorts': 'hiddengem',  # Legacy support
+        'TopDrawerLadies': 'topdrawer',  # Legacy support
     }
 
     # Log for debugging

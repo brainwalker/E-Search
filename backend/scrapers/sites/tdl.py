@@ -356,8 +356,8 @@ class TDLScraper(BaseScraper):
             except ValueError:
                 pass
 
-        # Height pattern: "Height: 5' 4""
-        height_match = re.search(r'Height[:\s]+(\d[\'′]\s*\d+[\"″]?)', page_text)
+        # Height pattern: "Height: 5' 4"" or "Height: 5,6" or "Height: 5'4"
+        height_match = re.search(r'Height[:\s]+(\d[\'\u2019\u2032,]\s*\d+[\"″]?)', page_text)
         if height_match:
             profile['height'] = normalize_height(height_match.group(1))
 
@@ -384,26 +384,25 @@ class TDLScraper(BaseScraper):
                 if bust_match:
                     profile['bust'] = normalize_bust_size(bust_match.group(1))
 
-        # Hair Color pattern: "Hair Color: Brunette"
-        # Only match single word or two-word colors (e.g., "Light Brown")
+        # Hair Color pattern: "Hair Color: Dark Brown" - require "Color" to avoid "Hair Type"
+        # Only allow valid color words as second word to avoid "Brown Body"
         hair_match = re.search(
-            r'Hair\s*Color[:\s]+([A-Za-z]+(?:\s+(?:Brown|Blonde|Black|Red))?)',
+            r'Hair\s+Color[:\s]+([A-Za-z]+(?:\s+(?:Brown|Blonde|Black|Red|Auburn|Brunette))?)',
             page_text, re.IGNORECASE
         )
         if hair_match:
             hair = hair_match.group(1).strip()
-            # Filter out invalid captures
-            if hair.lower() not in ('body', 'size'):
-                profile['hair_color'] = hair.title()
+            profile['hair_color'] = hair.title()
 
-        # Eye Color pattern: "Eye Color: Brown"
+        # Eye Color pattern: "Eye Color: Brown" or "Eyes: Blue"
         eye_match = re.search(
-            r'Eye\s*Color[:\s]+([A-Za-z]+)',
+            r'Eyes?(?:\s*Color)?[:\s]+([A-Za-z]+)',
             page_text, re.IGNORECASE
         )
         if eye_match:
             eye = eye_match.group(1).strip()
-            profile['eye_color'] = eye.title()
+            if eye.lower() not in ('color',):
+                profile['eye_color'] = eye.title()
 
         # Race/Ethnicity pattern: "Race/Ethnicity: Canadian"
         # Only match single nationality word to avoid capturing next field
